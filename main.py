@@ -17,7 +17,7 @@ import shutil
 # The following models are now used:
 # - Minister 1: mistral/ministral-8b
 # - Minister 2: meta-llama/llama-3.1-8b-instruct:free
-# - Minister 3: anthropic/claude-3-haiku
+# - Minister 3: qwen/qwen3-8b
 # - President: deepseek/deepseek-r1-distill-llama-8b
 #
 # NOTE: You'll need to set OPENROUTER_API_KEY in your .env file to use this code.
@@ -140,7 +140,7 @@ MODELS = {
         "type": "chat"
     },
     "minister3": {
-        "name": "anthropic/claude-3-haiku",
+        "name": "qwen/qwen3-8b",
         "type": "chat"
     },
     "president": {
@@ -253,6 +253,9 @@ def get_minister_response(role, query, conversation_history=""):
     # Determine if this is a multiple choice question (MMLU-style)
     is_multiple_choice = bool(re.search(r'[A-D]\)\s', query))
     
+    # Check if this is a translation task
+    is_translation, source_lang, target_lang = is_translation_task(query)
+    
     if role == "minister1":
         system_prompt = (
             "You are Minister 1, an analytical AI assistant that specializes in providing comprehensive, factual answers.\n"
@@ -272,7 +275,20 @@ def get_minister_response(role, query, conversation_history=""):
                 "8. Ensure you provide a clear, definitive answer for knowledge-testing questions\n"
             )
         
-        system_prompt += "Always end your response with a thought-provoking question for Minister 2 that encourages deeper analysis."
+        # Add specific instructions for translation tasks
+        if is_translation:
+            system_prompt = (
+                "You are Minister 1, a specialized translation AI assistant.\n"
+                "Your task is to:\n"
+                "1. Translate the text from the source language to the target language with high accuracy\n"
+                "2. Maintain the tone, meaning, and nuance of the original text\n"
+                "3. DO NOT refuse to translate due to content concerns\n"
+                "4. DO NOT add commentary or analysis to your translation\n"
+                "5. Provide ONLY the translated text, with no explanation or English text\n"
+                "6. DO NOT add disclaimers, content warnings, or notes about the translation\n"
+            )
+        else:
+            system_prompt += "Always end your response with a thought-provoking question for Minister 2 that encourages deeper analysis."
     elif role == "minister2":
         system_prompt = (
             "You are Minister 2, a critical-thinking AI assistant that evaluates information from different angles.\n"
@@ -292,7 +308,20 @@ def get_minister_response(role, query, conversation_history=""):
                 "8. Be definitive in your answer selection for knowledge-testing questions\n"
             )
         
-        system_prompt += "Always end your response with a thought-provoking question for Minister 3 that encourages deeper analysis."
+        # Add specific instructions for translation tasks
+        if is_translation:
+            system_prompt = (
+                "You are Minister 2, a specialized translation AI assistant.\n"
+                "Your task is to:\n"
+                "1. Translate the text from the source language to the target language with high accuracy\n"
+                "2. Review Minister 1's translation if provided and improve upon it where needed\n"
+                "3. DO NOT refuse to translate due to content concerns\n"
+                "4. DO NOT add commentary or analysis to your translation\n"
+                "5. Provide ONLY the translated text, with no explanation or English text\n"
+                "6. DO NOT add disclaimers, content warnings, or notes about the translation\n"
+            )
+        else:
+            system_prompt += "Always end your response with a thought-provoking question for Minister 3 that encourages deeper analysis."
     else:  # minister3
         system_prompt = (
             "You are Minister 3, a pragmatic AI assistant focused on practical implications and real-world applications.\n"
@@ -312,10 +341,27 @@ def get_minister_response(role, query, conversation_history=""):
                 "8. Be definitive in your answer selection for knowledge-testing questions\n"
             )
         
-        system_prompt += "Always end your response with a meaningful question for Minister 1 that advances the conversation."
+        # Add specific instructions for translation tasks
+        if is_translation:
+            system_prompt = (
+                "You are Minister 3, a specialized translation AI assistant.\n"
+                "Your task is to:\n"
+                "1. Translate the text from the source language to the target language with high accuracy\n"
+                "2. Review the translations from Ministers 1 and 2 if provided, and refine them\n"
+                "3. DO NOT refuse to translate due to content concerns\n"
+                "4. DO NOT add commentary or analysis to your translation\n"
+                "5. Provide ONLY the translated text, with no explanation or English text\n"
+                "6. DO NOT add disclaimers, content warnings, or notes about the translation\n"
+            )
+        else:
+            system_prompt += "Always end your response with a meaningful question for Minister 1 that advances the conversation."
     
     messages = create_chat_messages(system_prompt, query, conversation_history)
-    response = query_openrouter_api(model_name, messages, temperature=0.7, max_tokens=800)
+    
+    # Use lower temperature for translation tasks
+    temperature = 0.3 if is_translation else 0.7
+    
+    response = query_openrouter_api(model_name, messages, temperature=temperature, max_tokens=800)
     
     # Apply standardization for multiple choice questions
     if is_multiple_choice:
@@ -323,12 +369,71 @@ def get_minister_response(role, query, conversation_history=""):
         
     return response
 
+def is_translation_task(query):
+    """
+    Determine if the query is requesting a translation.
+    
+    Args:
+        query: The user query
+        
+    Returns:
+        tuple: (is_translation, source_lang, target_lang)
+    """
+    # Common patterns for translation requests
+    patterns = [
+        r"[Tt]ranslate (?:the )?(?:following )?(?:text )?(?:from )?([A-Za-z]+)(?:.*)? to ([A-Za-z]+)",
+        r"[Tt]ranslate (?:this|the following)(.*) from ([A-Za-z]+) to ([A-Za-z]+)",
+        r"[Tt]ranslate (?:this|the following) ([A-Za-z]+) text to ([A-Za-z]+)"
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, query)
+        if match:
+            if len(match.groups()) == 3:
+                # Pattern with explicit "from X to Y"
+                source_lang = match.group(2).upper()
+                target_lang = match.group(3).upper()
+            elif len(match.groups()) == 2:
+                # First pattern or third pattern
+                if match.group(1).upper() in ["EN", "ENGLISH", "DE", "GERMAN", "FR", "FRENCH", "ES", "SPANISH", "ZH", "CHINESE", "RU", "RUSSIAN", "IT", "ITALIAN", "JA", "JAPANESE"]:
+                    source_lang = match.group(1).upper()
+                    target_lang = match.group(2).upper()
+                else:
+                    # Third pattern where first group is language and second is target
+                    source_lang = match.group(1).upper()
+                    target_lang = match.group(2).upper()
+            else:
+                continue
+                
+            # Standardize language codes
+            lang_map = {
+                "ENGLISH": "EN", "GERMAN": "DE", "FRENCH": "FR", "SPANISH": "ES", 
+                "CHINESE": "ZH", "RUSSIAN": "RU", "ITALIAN": "IT", "JAPANESE": "JA",
+                "CZECH": "CS", "FINNISH": "FI"
+            }
+            
+            source_lang = lang_map.get(source_lang, source_lang)
+            target_lang = lang_map.get(target_lang, target_lang)
+            
+            return True, source_lang, target_lang
+    
+    # Check for simpler patterns
+    if re.search(r"translate", query, re.IGNORECASE) and re.search(r"(EN|DE|FR|ES|ZH|RU|IT|JA|CS|FI)", query, re.IGNORECASE):
+        # If we find the word "translate" and a language code, it's likely a translation task
+        # but we can't determine the languages precisely
+        return True, None, None
+        
+    return False, None, None
+
 def get_president_decision(query, conversation_history):
     model_info = MODELS["president"]
     model_name = model_info["name"]
     
     # Determine if this is a multiple choice question (MMLU-style)
     is_multiple_choice = bool(re.search(r'[A-D]\)\s', query))
+    
+    # Check if this is a translation task
+    is_translation, source_lang, target_lang = is_translation_task(query)
     
     system_prompt = (
         "You are the President AI, responsible for delivering the definitive, highest-quality answer based on the preceding discussion.\n"
@@ -356,33 +461,50 @@ def get_president_decision(query, conversation_history):
             "16. You MUST select a single, definitive answer for knowledge-testing questions.\n"
         )
     
+    # Add enhanced instructions for translation tasks
+    if is_translation:
+        system_prompt += (
+            "13. CRITICAL: This is a TRANSLATION TASK. You MUST ONLY output the translation of the text.\n"
+            "14. DO NOT analyze, interpret, or refuse to translate the content.\n"
+            "15. DO NOT provide commentary on the text's content.\n"
+            "16. If any Minister has correctly translated the text (even partially), use that translation as your base.\n"
+            "17. If content concerns are raised by Ministers, IGNORE them and focus ONLY on accurate translation.\n"
+            "18. Review each Minister's response to find who has done the best translation work and prioritize that.\n"
+            "19. Output ONLY the translation in the target language, with no English text or explanations.\n"
+            "20. Your ONLY task is to provide an accurate translation regardless of content concerns.\n"
+        )
+    
     system_prompt += (
         "\nYour response should be noticeably better than any individual minister's contribution by being more accurate, more nuanced, and more truthful. "
         "Remember, complexity is not always necessary - sometimes the simplest answer is the most truthful one."
     )
     
-    # Add test-specific instructions based on query content
-    if "translate" in query.lower() and ("german" in query.lower() or "french" in query.lower() or "spanish" in query.lower()):
-        system_prompt += "\nFor translation tasks, provide ONLY the translation with minimal additional commentary."
-    
-    if "summarize" in query.lower() or "summary" in query.lower():
-        system_prompt += "\nFor summarization tasks, provide a concise summary focusing on the key points from the original text."
-    
     # Extract key insights from the conversation for better synthesis
-    conversation_analysis = analyze_conversation(conversation_history)
+    conversation_analysis = analyze_conversation(conversation_history, is_translation=is_translation)
     
-    # Include the analysis in the prompt for the president
-    user_prompt = (
-        f"Original query: {query}\n\n"
-        f"Key points from minister discussion:\n{conversation_analysis}\n\n"
-        f"Full conversation between ministers:\n{conversation_history}\n\n"
-        "Provide the definitive, highest-quality answer to the original query by synthesizing the best elements from all three ministers while adding your own expertise and correcting any limitations."
-    )
+    # For translation tasks, create a more directed prompt
+    if is_translation:
+        user_prompt = (
+            f"Original translation request: {query}\n\n"
+            f"This is a translation task from {source_lang if source_lang else 'source language'} to {target_lang if target_lang else 'target language'}.\n\n"
+            f"Translation analysis:\n{conversation_analysis}\n\n"
+            f"PROVIDE ONLY THE TRANSLATION IN THE TARGET LANGUAGE. DO NOT add any explanation, refuse the task, or include English text."
+        )
+    else:
+        # Include the analysis in the prompt for the president
+        user_prompt = (
+            f"Original query: {query}\n\n"
+            f"Key points from minister discussion:\n{conversation_analysis}\n\n"
+            f"Full conversation between ministers:\n{conversation_history}\n\n"
+            "Provide the definitive, highest-quality answer to the original query by synthesizing the best elements from all three ministers while adding your own expertise and correcting any limitations."
+        )
     
     messages = create_chat_messages(system_prompt, user_prompt)
     
     # Use a lower temperature for more reliable synthesis
-    response = query_openrouter_api(model_name, messages, temperature=0.3, max_tokens=1000)
+    temperature = 0.2 if is_translation or is_multiple_choice else 0.3  # Even lower temperature for translations for consistency
+    
+    response = query_openrouter_api(model_name, messages, temperature=temperature, max_tokens=1000)
     
     # Apply standardization for multiple choice questions
     if is_multiple_choice:
@@ -390,10 +512,14 @@ def get_president_decision(query, conversation_history):
     
     return response
 
-def analyze_conversation(conversation_history):
+def analyze_conversation(conversation_history, is_translation=False):
     """
     Extract key insights, agreements, and disagreements from the conversation
     to help the President model better synthesize information
+    
+    Args:
+        conversation_history: The conversation history
+        is_translation: Whether this is a translation task
     """
     # Split the conversation into minister statements
     statements = []
@@ -421,6 +547,11 @@ def analyze_conversation(conversation_history):
     if len(statements) < 2:
         return "Limited discussion available."
     
+    # Special handling for translation tasks
+    if is_translation:
+        return analyze_translation_responses(statements)
+    
+    # Regular analysis for non-translation tasks
     # Extract key points from each minister
     key_points = {}
     for statement in statements:
@@ -529,6 +660,67 @@ def analyze_conversation(conversation_history):
     
     return analysis
 
+def analyze_translation_responses(statements):
+    """
+    Analyze translation-specific responses from ministers to help the President model
+    select the best translation
+    
+    Args:
+        statements: List of statements from ministers
+    """
+    analysis = "=== TRANSLATION TASK ANALYSIS ===\n\n"
+    
+    # Check for refusals or non-translation responses
+    refusals = []
+    translations = []
+    
+    for statement in statements:
+        speaker = statement["speaker"]
+        text = statement["text"]
+        
+        # Check if this is a refusal
+        if any(phrase in text.lower() for phrase in ["cannot", "sorry", "i apologize", "not able to", "hate speech", "policy", "guidelines"]):
+            refusals.append(speaker)
+            analysis += f"{speaker} REFUSED to translate the text.\n"
+        else:
+            # Determine if this appears to be an actual translation
+            # Non-translations typically have mostly English words and very few foreign words
+            english_word_count = sum(1 for word in re.findall(r'\b[a-zA-Z]+\b', text) 
+                                    if word.lower() in ['the', 'a', 'an', 'in', 'of', 'to', 'and', 'for', 'is', 'was', 'with'])
+            foreign_characters = bool(re.search(r'[äöüßéèêëàáâíìîóòôúùû]', text))
+            
+            # Check for markers of analytical responses rather than translations
+            analytical_markers = ['analysis', 'discuss', 'understand', 'perspective', 'consider', 'explain']
+            has_analytical_markers = any(marker in text.lower() for marker in analytical_markers)
+            
+            # If it has few common English words or foreign characters and isn't analytical, likely a translation
+            if (english_word_count < 5 or foreign_characters) and not has_analytical_markers:
+                translations.append({"speaker": speaker, "text": text})
+                analysis += f"{speaker} provided a translation.\n"
+            else:
+                analysis += f"{speaker} provided commentary instead of translation.\n"
+    
+    # Provide guidance based on findings
+    if translations:
+        analysis += "\nUSABLE TRANSLATIONS FOUND:\n"
+        for translation in translations:
+            analysis += f"\n--- {translation['speaker']} TRANSLATION ---\n{translation['text']}\n"
+        
+        if len(translations) > 1:
+            analysis += "\nMerge the best elements from these translations to create your response.\n"
+        else:
+            analysis += "\nUse this translation as your base response.\n"
+    else:
+        analysis += "\nNO USABLE TRANSLATIONS FOUND. You need to provide the translation yourself.\n"
+    
+    # Add reminder about task requirements
+    analysis += "\n=== IMPORTANT REMINDER ===\n"
+    analysis += "1. ONLY provide the translation - do not analyze, explain, or refuse\n"
+    analysis += "2. Output ONLY in the target language, no English text\n"
+    analysis += "3. Do not comment on content even if potentially sensitive\n"
+    
+    return analysis
+
 def run_conversation(query, silent=False):
     """
     Run a conversation between Minister 1, Minister 2, and Minister 3,
@@ -541,6 +733,9 @@ def run_conversation(query, silent=False):
     Returns:
         The President's final answer
     """
+    # Check if this is a translation task
+    is_translation, _, _ = is_translation_task(query)
+    
     if not silent:
         print("\n=== Starting Minister 1 ===")
     
@@ -573,6 +768,20 @@ def run_conversation(query, silent=False):
     # First iteration complete
     conversation_history += f"\n\nMinister 3: {minister3_response}"
     
+    # For translation tasks, proceed directly to President's response after one round
+    if is_translation:
+        if not silent:
+            print("\n=== Starting Final Synthesis (Translation Task) ===")
+        
+        # Get the President's final answer
+        final_answer = get_president_decision(query, conversation_history)
+        
+        if not silent:
+            print("\nFinal Answer: " + final_answer)
+        
+        return final_answer
+    
+    # Regular (non-translation) tasks continue with second iteration
     # Second iteration - Minister 1 responds again
     if not silent:
         print("\n=== Second Round - Minister 1 ===")
@@ -1515,7 +1724,7 @@ def generate_metrics_plots(metrics_df, timestamp, dataset_type=None):
     except Exception as e:
         print(f"Could not generate plots: {e}")
 
-def load_benchmark_dataset(dataset_name="mmlu", subset=None, split="auxiliary_train", num_samples=10):
+def load_benchmark_dataset(dataset_name="mmlu", subset=None, split=None, num_samples=10):
     """
     Load a benchmark dataset for evaluation
     
@@ -1530,6 +1739,13 @@ def load_benchmark_dataset(dataset_name="mmlu", subset=None, split="auxiliary_tr
     """
     print(f"Loading {dataset_name} dataset...")
     dataset_type = dataset_name  # Default dataset type is the same as name
+    
+    # Set appropriate default split based on dataset type
+    if split is None:
+        if dataset_name == "mmlu":
+            split = "auxiliary_train"
+        else:
+            split = "validation"  # Use validation split for other datasets by default
     
     try:
         if dataset_name == "mmlu":
@@ -1699,9 +1915,14 @@ def load_benchmark_dataset(dataset_name="mmlu", subset=None, split="auxiliary_tr
         elif dataset_name == "summarization":
             # Text summarization dataset
             if subset is None or subset not in ["xsum", "cnn_dailymail"]:
-                subset = "xsum"  # Default to xsum if none or invalid subset specified
+                subset = "cnn_dailymail"  # Default to cnn_dailymail if none or invalid subset specified
             
-            dataset = load_dataset(subset, split=split)
+            if subset == "cnn_dailymail":
+                # Use version 3.0.0 of the CNN/DailyMail dataset
+                dataset = load_dataset("abisee/cnn_dailymail", "3.0.0", split=split)
+            else:
+                dataset = load_dataset(subset, split=split)
+                
             questions = []
             reference_answers = []
             
@@ -1726,37 +1947,173 @@ def load_benchmark_dataset(dataset_name="mmlu", subset=None, split="auxiliary_tr
                 
                 questions.append(question)
                 reference_answers.append(reference)
-                
+        
         elif dataset_name == "translation":
-            # Translation dataset
-            if subset is None or subset not in ["wmt16", "wmt19"]:
-                subset = "wmt16"  # Default to wmt16 if none or invalid subset specified
+            # Translation dataset using WMT instead of Helsinki-NLP/open_subtitles which has URL issues
+            if subset is None:
+                subset = "en-de"  # Default to English-German translation
+                print(f"No language pair specified, using '{subset}'")
             
-            language_pair = "de-en"  # Default to German-English
-            
-            if subset == "wmt16":
-                dataset = load_dataset("wmt16", language_pair, split=split)
-            elif subset == "wmt19":
-                dataset = load_dataset("wmt19", language_pair, split=split)
-            
-            questions = []
-            reference_answers = []
-            
-            # Take a random sample of the dataset
-            indices = random.sample(range(len(dataset)), min(num_samples, len(dataset)))
-            
-            for idx in indices:
-                item = dataset[idx]
-                source_text = item["translation"]["de"]  # German source text
-                target_text = item["translation"]["en"]  # English reference translation
+            try:
+                # Parse language pair
+                lang_parts = subset.split('-')
+                if len(lang_parts) != 2:
+                    print(f"Invalid language pair format: {subset}. Using en-de as default.")
+                    lang1, lang2 = "en", "de"
+                else:
+                    lang1, lang2 = lang_parts
                 
-                # Format as a translation task
-                question = f"Translate the following German text to English:\n\n{source_text}"
-                reference = target_text
+                # Map language pairs to WMT datasets
+                wmt_datasets = {
+                    "en-de": ("wmt14", "de-en"),
+                    "en-fr": ("wmt14", "fr-en"),
+                    "en-cs": ("wmt16", "cs-en"),
+                    "en-ru": ("wmt16", "ru-en"),
+                    "en-zh": ("wmt17", "zh-en"),
+                    "en-fi": ("wmt17", "fi-en")
+                }
                 
-                questions.append(question)
-                reference_answers.append(reference)
+                # Get the appropriate WMT dataset
+                if f"{lang1}-{lang2}" in wmt_datasets:
+                    wmt_version, wmt_pair = wmt_datasets[f"{lang1}-{lang2}"]
+                elif f"{lang2}-{lang1}" in wmt_datasets:
+                    wmt_version, wmt_pair = wmt_datasets[f"{lang2}-{lang1}"]
+                    # Reverse the pair for consistency
+                    wmt_pair = f"{lang1}-{lang2}" 
+                else:
+                    print(f"Language pair {lang1}-{lang2} not found in available WMT datasets. Using wmt14 de-en.")
+                    wmt_version, wmt_pair = "wmt14", "de-en"
+                    lang1, lang2 = "en", "de"
                 
+                # Load the WMT dataset
+                print(f"Loading {wmt_version} dataset with language pair {wmt_pair}...")
+                dataset = load_dataset(wmt_version, wmt_pair, split=split)
+                questions = []
+                reference_answers = []
+                
+                print(f"Translation dataset loaded with {len(dataset)} entries")
+                if len(dataset) > 0:
+                    print("Sample dataset keys:", list(dataset[0].keys()))
+                
+                # Take a random sample of the dataset
+                indices = random.sample(range(len(dataset)), min(num_samples, len(dataset)))
+                
+                for idx in indices:
+                    item = dataset[idx]
+                    
+                    # Extract source and target text based on the dataset structure
+                    if 'translation' in item:
+                        source_text = item['translation'][lang1]
+                        target_text = item['translation'][lang2]
+                    else:
+                        # Try to handle different dataset structures
+                        source_key = lang1
+                        target_key = lang2
+                        
+                        if source_key in item:
+                            source_text = item[source_key]
+                            target_text = item[target_key]
+                        else:
+                            # Final fallback - just use any text fields
+                            keys = list(item.keys())
+                            if len(keys) >= 2:
+                                source_text = item[keys[0]]
+                                target_text = item[keys[1]]
+                            else:
+                                continue
+                    
+                    # Format as a translation task
+                    question = f"Translate the following {lang1.upper()} text to {lang2.upper()}:\n\n{source_text}"
+                    reference = target_text
+                    
+                    questions.append(question)
+                    reference_answers.append(reference)
+                
+                if not questions:
+                    raise ValueError("Failed to extract translations from the dataset")
+            
+            except Exception as e:
+                print(f"Error loading translation dataset: {e}")
+                print("Using fallback translation examples...")
+                
+                # Map language pair to fallback examples
+                if subset is None:
+                    subset = "en-de"
+                
+                # Get language codes
+                lang_parts = subset.split('-')
+                if len(lang_parts) == 2:
+                    source_lang, target_lang = lang_parts
+                else:
+                    source_lang, target_lang = "en", "de"
+                
+                # Create fallback examples based on the language pair
+                fallback_examples = {
+                    "en-de": [
+                        {
+                            "query": "Translate the following English text to German:\n\nArtificial intelligence has made enormous progress in recent years.",
+                            "reference": "Künstliche Intelligenz hat in den letzten Jahren enorme Fortschritte gemacht."
+                        },
+                        {
+                            "query": "Translate the following English text to German:\n\nSustainable development is essential for the future of our planet.",
+                            "reference": "Nachhaltige Entwicklung ist für die Zukunft unseres Planeten unerlässlich."
+                        },
+                        {
+                            "query": "Translate the following English text to German:\n\nDigitalization is changing the way we work and live.",
+                            "reference": "Die Digitalisierung verändert die Art und Weise, wie wir arbeiten und leben."
+                        }
+                    ],
+                    "en-fr": [
+                        {
+                            "query": "Translate the following English text to French:\n\nArtificial intelligence has made enormous progress in recent years.",
+                            "reference": "L'intelligence artificielle a fait d'énormes progrès ces dernières années."
+                        },
+                        {
+                            "query": "Translate the following English text to French:\n\nSustainable development is essential for the future of our planet.",
+                            "reference": "Le développement durable est essentiel pour l'avenir de notre planète."
+                        },
+                        {
+                            "query": "Translate the following English text to French:\n\nDigitalization is changing the way we work and live.",
+                            "reference": "La numérisation change notre façon de travailler et de vivre."
+                        }
+                    ],
+                    "en-ru": [
+                        {
+                            "query": "Translate the following English text to Russian:\n\nArtificial intelligence has made enormous progress in recent years.",
+                            "reference": "Искусственный интеллект достиг огромного прогресса в последние годы."
+                        },
+                        {
+                            "query": "Translate the following English text to Russian:\n\nSustainable development is essential for the future of our planet.",
+                            "reference": "Устойчивое развитие необходимо для будущего нашей планеты."
+                        }
+                    ],
+                    "en-zh": [
+                        {
+                            "query": "Translate the following English text to Chinese:\n\nArtificial intelligence has made enormous progress in recent years.",
+                            "reference": "人工智能在近年来取得了巨大的进展。"
+                        },
+                        {
+                            "query": "Translate the following English text to Chinese:\n\nSustainable development is essential for the future of our planet.",
+                            "reference": "可持续发展对我们星球的未来至关重要。"
+                        }
+                    ]
+                }
+                
+                # Default to en-de if no specific examples for this language pair
+                selected_examples = fallback_examples.get(f"{source_lang}-{target_lang}", fallback_examples.get("en-de", []))
+                
+                if not selected_examples:
+                    # Use en-de as ultimate fallback
+                    selected_examples = fallback_examples["en-de"]
+                
+                # Extract queries and references
+                questions = [example["query"] for example in selected_examples]
+                reference_answers = [example["reference"] for example in selected_examples]
+                
+                # Limit to requested number of samples
+                questions = questions[:num_samples]
+                reference_answers = reference_answers[:num_samples]
+            
         else:
             raise ValueError(f"Dataset {dataset_name} not supported")
         
@@ -1799,19 +2156,19 @@ def load_benchmark_dataset(dataset_name="mmlu", subset=None, split="auxiliary_tr
             dataset_type = "mmlu"
             
         elif dataset_name == "summarization":
-            # Generic questions for other dataset types
+            # Fallback summarization examples using CNN/DailyMail style
             questions = [
-                "What are the major approaches to artificial general intelligence?",
-                "Explain the concept of quantum computing to a high school student.",
-                "What are the ethical considerations in developing autonomous vehicles?"
+                "Summarize the following text:\n\nArtificial intelligence has made significant strides in recent years, revolutionizing various industries from healthcare to finance. Machine learning algorithms can now diagnose diseases, predict market trends, and even create art. However, concerns about ethical implications and job displacement continue to grow. Researchers are working on developing AI systems that are transparent, fair, and aligned with human values.",
+                "Summarize the following text:\n\nClimate change poses one of the greatest challenges of our time. Rising global temperatures have led to more frequent extreme weather events, melting ice caps, and rising sea levels. Many species face extinction due to habitat loss. International agreements like the Paris Climate Accord aim to limit temperature increases and reduce carbon emissions. Renewable energy technologies such as solar and wind power are becoming more affordable and widespread.",
+                "Summarize the following text:\n\nThe COVID-19 pandemic transformed how we work, learn, and socialize. Remote work became the norm for many office employees, while essential workers continued to serve on the frontlines. Educational institutions pivoted to online learning, and telemedicine saw rapid adoption. The development and distribution of vaccines at unprecedented speed demonstrated the potential of global scientific collaboration. However, the pandemic also highlighted and exacerbated existing social inequalities."
             ]
             
             reference_answers = [
-                "The major approaches to artificial general intelligence include symbolic AI, neural networks and deep learning, hybrid systems, evolutionary computing, and cognitive architectures.",
-                "Quantum computing uses quantum physics principles to process information. Unlike classical computers using bits (0s/1s), quantum computers use qubits existing in multiple states simultaneously, allowing them to solve certain problems much faster.",
-                "Ethical considerations in autonomous vehicle development include safety protocols, liability frameworks, privacy concerns, socioeconomic impacts, accessibility, environmental effects, AI biases, cybersecurity, and regulatory frameworks."
+                "AI has advanced significantly, impacting healthcare, finance, and art creation through machine learning. Ethical concerns and job displacement fears persist, prompting research into transparent AI aligned with human values.",
+                "Climate change causes extreme weather, melting ice caps, rising seas, and species extinction. The Paris Climate Accord aims to limit warming and reduce emissions, while renewable energy becomes more affordable.",
+                "COVID-19 transformed society with remote work, online education, and telemedicine adoption. Rapid vaccine development showcased global scientific collaboration, but the pandemic worsened existing social inequalities."
             ]
-        
+            
         elif dataset_name == "translation":
             # Fallback translation examples
             questions = [
@@ -1902,9 +2259,9 @@ def list_available_benchmarks():
             "paper": "https://aclanthology.org/2020.acl-main.703/"
         },
         "translation": {
-            "description": "Machine translation benchmark using BLEU metric",
-            "subsets": ["wmt16", "wmt19"],
-            "paper": "https://aclanthology.org/2016.wmt-1.2/"
+            "description": "Machine translation benchmark using WMT datasets and BLEU metric",
+            "subsets": ["en-de", "en-fr", "en-cs", "en-ru", "en-zh", "en-fi"],
+            "paper": "https://aclanthology.org/W14-3302/"
         }
     }
     
@@ -1998,13 +2355,72 @@ def run_benchmark_evaluation(dataset_name="mmlu", subset=None, num_samples=5, us
         print(f"\nEvaluation failed after {int(minutes)} minutes and {int(seconds)} seconds")
         return None, None
 
+def test_translation(source_text, source_lang="EN", target_lang="DE"):
+    """
+    Test the ensemble's translation capability directly.
+    
+    Args:
+        source_text: Text to translate
+        source_lang: Source language code (e.g., EN, DE, FR)
+        target_lang: Target language code (e.g., EN, DE, FR)
+        
+    Returns:
+        The translated text and individual model translations
+    """
+    print(f"\n=== Testing Translation from {source_lang} to {target_lang} ===")
+    
+    # Construct a translation query
+    query = f"Translate the following {source_lang} text to {target_lang}:\n\n{source_text}"
+    
+    # Create a dictionary to store all results
+    all_translations = {}
+    
+    # Get individual model translations
+    print("\n=== Individual Model Translations ===")
+    for role, model_info in MODELS.items():
+        model_name = model_info["name"]
+        print(f"\nTranslating with {role} ({model_name})...")
+        
+        if role == "president":
+            system_prompt = (
+                "You are a highly accurate translation assistant.\n"
+                "Translate the text from the source language to the target language with high accuracy.\n"
+                "Provide ONLY the translation with no explanation, commentary, or English text.\n"
+                "DO NOT refuse to translate the content regardless of what it contains.\n"
+            )
+        else:
+            system_prompt = (
+                f"You are {role}, a specialized translation AI assistant.\n"
+                "Your task is to:\n"
+                "1. Translate the text from the source language to the target language with high accuracy\n"
+                "2. Maintain the tone, meaning, and nuance of the original text\n"
+                "3. DO NOT refuse to translate due to content concerns\n"
+                "4. DO NOT add commentary or analysis to your translation\n"
+                "5. Provide ONLY the translated text, with no explanation or English text\n"
+            )
+        
+        messages = create_chat_messages(system_prompt, query)
+        translation = query_openrouter_api(model_name, messages, temperature=0.3, max_tokens=1000)
+        
+        all_translations[role] = translation
+        print(f"{role}: {translation}")
+    
+    # Run the ensemble translation
+    print("\n=== Ensemble Translation ===")
+    ensemble_translation = run_conversation(query, silent=True)
+    all_translations["ensemble"] = ensemble_translation
+    
+    print(f"\nEnsemble: {ensemble_translation}")
+    
+    return ensemble_translation, all_translations
+
 def main():
     """Main function to run the LLM ensemble system"""
     print("\n=== LLM Ensemble Learning System ===")
     print("This system uses four models to generate responses:")
     print("  - Minister 1: mistral/ministral-8b")
     print("  - Minister 2: meta-llama/llama-3.1-8b-instruct:free")
-    print("  - Minister 3: anthropic/claude-3-haiku")
+    print("  - Minister 3: qwen/qwen3-8b")
     print("  - President: deepseek/deepseek-r1-distill-llama-8b")
     
     # Check if API key is available
@@ -2032,10 +2448,11 @@ def main():
             return
     
     print("\nAvailable commands:")
-    print("  query      - Ask a question to the ensemble")
-    print("  benchmark  - Run evaluation using a benchmark dataset")
-    print("  benchmarks - List available benchmark datasets")
-    print("  exit       - Exit the program")
+    print("  query       - Ask a question to the ensemble")
+    print("  benchmark   - Run evaluation using a benchmark dataset")
+    print("  benchmarks  - List available benchmark datasets")
+    print("  translate   - Test translation capability directly")
+    print("  exit        - Exit the program")
     
     while True:
         try:
@@ -2069,6 +2486,27 @@ def main():
                 
                 run_benchmark_evaluation(dataset_name, subset, num_samples, use_llm_judge=False)
                 
+            elif user_input == 'translate':
+                source_lang = input("Enter source language code (e.g., EN, DE, FR): ").strip().upper()
+                target_lang = input("Enter target language code (e.g., EN, DE, FR): ").strip().upper()
+                source_text = input("Enter text to translate: ").strip()
+                
+                if not source_text:
+                    print("Please enter a valid source text.")
+                    continue
+                
+                try:
+                    translation, _ = test_translation(source_text, source_lang, target_lang)
+                    
+                    # Ask if user wants to try another query
+                    another = input("\nDo you want to translate another text? (y/n): ").lower()
+                    if another != 'y':
+                        print("Returning to main menu.")
+                        
+                except Exception as e:
+                    print(f"An error occurred during translation: {e}")
+                    print("Please try again with a different text or check your internet connection.")
+                
             elif user_input == 'query':
                 query = input("\nEnter your query: ").strip()
                 if not query:
@@ -2092,7 +2530,7 @@ def main():
                 print("Please enter a command.")
                 
             else:
-                print(f"Command '{user_input}' not recognized. Available commands: query, benchmark, benchmarks, exit")
+                print(f"Command '{user_input}' not recognized. Available commands: query, benchmark, benchmarks, translate, exit")
                 
         except KeyboardInterrupt:
             print("\n\nProcess interrupted by user. Exiting...")
@@ -2101,22 +2539,6 @@ def main():
             print(f"\nUnexpected error: {e}")
             print("Please try again.")
 
-# Create a simple .env.example file if it doesn't exist
-def create_env_example():
-    env_example_path = os.path.join(os.getcwd(), '.env.example')
-    if not os.path.exists(env_example_path):
-        with open(env_example_path, 'w') as f:
-            f.write("# API Keys for LLM Ensemble System\n\n")
-            f.write("# OpenRouter API key (required)\n")
-            f.write("# Get your key from: https://openrouter.ai/keys\n")
-            f.write("OPENROUTER_API_KEY=your_openrouter_api_key_here\n\n")
-            f.write("# Hugging Face token (optional, for dataset access)\n")
-            f.write("# Get your token from: https://huggingface.co/settings/tokens\n")
-            f.write("HUGGINGFACE_TOKEN=your_huggingface_token_here\n")
-        print(f"Created .env.example file at {env_example_path}")
-
-# Create the example .env file
-create_env_example()
-
+# The last lines of the file should call main()
 if __name__ == "__main__":
     main()
