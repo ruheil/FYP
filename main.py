@@ -2,7 +2,7 @@ import os
 import time
 import requests
 import random
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv, find_dotenv, set_key
 import nltk
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from rouge import Rouge
@@ -11,14 +11,17 @@ import numpy as np
 from datasets import load_dataset
 import re
 import json
+import shutil
 
-# This code has been updated to use the Groq API instead of Hugging Face for inference.
+# This code has been updated to use the OpenRouter API for inference.
 # The following models are now used:
-# - Minister 1: llama3-8b-8192
-# - Minister 2: allam-2-7b
-# - President: gemma2-9b-it
+# - Minister 1: mistral/ministral-8b
+# - Minister 2: meta-llama/llama-3.1-8b-instruct:free
+# - Minister 3: anthropic/claude-3-haiku
+# - President: deepseek/deepseek-r1-distill-llama-8b
 #
-# NOTE: You'll need to set GROQ_API_KEY in your .env file to use this code.
+# NOTE: You'll need to set OPENROUTER_API_KEY in your .env file to use this code.
+# For benchmark datasets, set HUGGINGFACE_TOKEN in your .env file.
 
 # Download necessary NLTK data
 try:
@@ -52,38 +55,105 @@ def safe_sent_tokenize(text):
 # Explicitly set NLTK data path to avoid errors
 nltk.data.path.append(os.path.join(os.getcwd(), 'nltk_data'))
 
-# Load environment variables
-load_dotenv(find_dotenv())
-groq_api_key = os.getenv("GROQ_API_KEY")
-if not groq_api_key:
-    raise RuntimeError("GROQ_API_KEY not found in environment")
+def check_and_create_env_file():
+    """Check if .env file exists, create it from .env.example if needed, and prompt for API keys"""
+    env_file = find_dotenv()
+    
+    if not env_file:
+        print("No .env file found. Checking for .env.example...")
+        example_env = find_dotenv('.env.example')
+        
+        if example_env:
+            print("Found .env.example. Creating .env file...")
+            shutil.copy(example_env, os.path.join(os.path.dirname(example_env), '.env'))
+            env_file = find_dotenv()
+            print("Created .env file. Please add your API keys.")
+        else:
+            # Create a basic .env file
+            env_file = os.path.join(os.getcwd(), '.env')
+            with open(env_file, 'w') as f:
+                f.write("# API Keys for LLM Ensemble\n")
+                f.write("OPENROUTER_API_KEY=\n")
+                f.write("HUGGINGFACE_TOKEN=\n")
+            print(f"Created new .env file at {env_file}")
+    
+    # Now we should have an env file
+    load_dotenv(env_file)
+    
+    # Check for OpenRouter API key
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+    if not openrouter_api_key or openrouter_api_key == "":
+        print("\nOpenRouter API key is missing. You need this to use the models.")
+        print("Get your free API key from: https://openrouter.ai/keys")
+        user_input = input("Would you like to enter your OpenRouter API key now? (y/n): ").strip().lower()
+        
+        if user_input == 'y':
+            api_key = input("Enter your OpenRouter API key: ").strip()
+            # Update the .env file
+            set_key(env_file, "OPENROUTER_API_KEY", api_key)
+            print("API key saved to .env file.")
+            # Reload environment variables
+            load_dotenv(env_file, override=True)
+        else:
+            print("You'll need to manually add your API key to the .env file later.")
+    
+    # Return True if we have the required API key
+    return os.getenv("OPENROUTER_API_KEY") is not None and os.getenv("OPENROUTER_API_KEY") != ""
 
-groq_headers = {
-    "Authorization": f"Bearer {groq_api_key}",
-    "Content-Type": "application/json"
+# Check and set up environment variables
+api_key_available = check_and_create_env_file()
+
+# Load environment variables again in case they were updated
+load_dotenv(find_dotenv(), override=True)
+openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+if not openrouter_api_key:
+    raise RuntimeError("OPENROUTER_API_KEY not found in environment. Please add it to your .env file.")
+
+# Get Hugging Face token for dataset access (optional)
+huggingface_token = os.getenv("HUGGINGFACE_TOKEN")
+if huggingface_token:
+    # Set the Hugging Face token for the datasets library
+    try:
+        from huggingface_hub import login
+        login(huggingface_token)
+        print("Successfully authenticated with Hugging Face")
+    except ImportError:
+        print("huggingface_hub package not installed. Authentication may not work properly.")
+        os.environ["HUGGINGFACE_TOKEN"] = huggingface_token
+else:
+    print("Warning: HUGGINGFACE_TOKEN not found in environment. Dataset access may be limited.")
+
+openrouter_headers = {
+    "Authorization": f"Bearer {openrouter_api_key}",
+    "Content-Type": "application/json",
+    "HTTP-Referer": "https://collaborative-llm-ensemble.github.io"  # Default fallback Referer
 }
 
 # Primary models for each role
 MODELS = {
     "minister1": {
-        "name": "llama3-8b-8192",
+        "name": "mistral/ministral-8b",
         "type": "chat"
     },
     "minister2": {
-        "name": "allam-2-7b",
+        "name": "meta-llama/llama-3.1-8b-instruct",
+        "type": "chat"
+    },
+    "minister3": {
+        "name": "anthropic/claude-3-haiku",
         "type": "chat"
     },
     "president": {
-        "name": "gemma2-9b-it",
+        "name": "deepseek/deepseek-r1-distill-llama-8b",
         "type": "chat"
     }
 }
 
-def query_groq_api(model_name, messages, temperature=0.7, max_tokens=1000):
+def query_openrouter_api(model_name, messages, temperature=0.7, max_tokens=1000):
     """
-    Query the Groq API with the given messages.
+    Query the OpenRouter API with the given messages.
     """
-    api_url = "https://api.groq.com/openai/v1/chat/completions"
+    api_url = "https://openrouter.ai/api/v1/chat/completions"
     max_retries = 5
     timeout_seconds = 60  # Add a timeout of 60 seconds for API requests
     
@@ -96,21 +166,42 @@ def query_groq_api(model_name, messages, temperature=0.7, max_tokens=1000):
     
     for attempt in range(max_retries):
         try:
-            response = requests.post(api_url, headers=groq_headers, json=payload, timeout=timeout_seconds)
+            response = requests.post(api_url, headers=openrouter_headers, json=payload, timeout=timeout_seconds)
+            
+            # Check for authentication errors
+            if response.status_code == 401 or response.status_code == 403:
+                auth_error = f"Authentication error (status code {response.status_code}). "
+                auth_error += "Please check your OPENROUTER_API_KEY environment variable."
+                print(auth_error)
+                return f"Error: {auth_error}"
+                
             if response.status_code == 200:
                 result = response.json()
                 if "choices" in result and len(result["choices"]) > 0:
                     return result["choices"][0]["message"]["content"]
-                return "Error: Unexpected response format from Groq API."
+                return "Error: Unexpected response format from OpenRouter API."
+                
             if response.status_code == 429:
                 print(f"Rate limit reached for {model_name}, waiting before retry (attempt {attempt+1}/{max_retries})...")
                 time.sleep(2 ** attempt + 5)  # Exponential backoff
                 continue
+                
             if response.status_code == 503:
                 print(f"Model {model_name} is loading, waiting before retry (attempt {attempt+1}/{max_retries})...")
                 time.sleep(30)  # Wait for model loading
                 continue
-            return f"Error: Could not generate response. Status code {response.status_code}."
+                
+            # Print more detailed error information
+            error_detail = ""
+            try:
+                error_json = response.json()
+                if "error" in error_json:
+                    error_detail = f": {error_json['error']}"
+            except:
+                pass
+                
+            return f"Error: Could not generate response. Status code {response.status_code}{error_detail}"
+            
         except requests.exceptions.Timeout:
             print(f"Timeout error with {model_name}, retrying (attempt {attempt+1}/{max_retries})...")
             timeout_seconds += 30
@@ -147,6 +238,8 @@ def create_chat_messages(system_prompt, user_prompt, conversation_history=""):
                 messages.append({"role": "assistant", "content": line[len("Minister 1: "):].strip()})
             elif line.startswith("Minister 2: "):
                 messages.append({"role": "assistant", "content": line[len("Minister 2: "):].strip()})
+            elif line.startswith("Minister 3: "):
+                messages.append({"role": "assistant", "content": line[len("Minister 3: "):].strip()})
     
     # Add the user prompt
     messages.append({"role": "user", "content": user_prompt})
@@ -180,7 +273,7 @@ def get_minister_response(role, query, conversation_history=""):
             )
         
         system_prompt += "Always end your response with a thought-provoking question for Minister 2 that encourages deeper analysis."
-    else:
+    elif role == "minister2":
         system_prompt = (
             "You are Minister 2, a critical-thinking AI assistant that evaluates information from different angles.\n"
             "Your task is to:\n"
@@ -199,10 +292,30 @@ def get_minister_response(role, query, conversation_history=""):
                 "8. Be definitive in your answer selection for knowledge-testing questions\n"
             )
         
+        system_prompt += "Always end your response with a thought-provoking question for Minister 3 that encourages deeper analysis."
+    else:  # minister3
+        system_prompt = (
+            "You are Minister 3, a pragmatic AI assistant focused on practical implications and real-world applications.\n"
+            "Your task is to:\n"
+            "1. Consider the practical applications and implications of the discussion from Ministers 1 and 2\n"
+            "2. Ground abstract concepts in concrete examples and real-world scenarios\n"
+            "3. Assess the utility and relevance of various perspectives shared by the other ministers\n"
+            "4. Identify actionable insights or key takeaways from the discussion\n"
+        )
+        
+        # Add specific instructions for multiple choice questions
+        if is_multiple_choice:
+            system_prompt += (
+                "5. For multiple choice questions, you MUST state your answer at the end in EXACTLY this format: \"The correct answer is X\" (where X is the letter of the correct option - A, B, C, or D).\n"
+                "6. Put this answer statement on its own line at the end of your response.\n"
+                "7. Do not use formatting (bold, italics) in your answer statement.\n"
+                "8. Be definitive in your answer selection for knowledge-testing questions\n"
+            )
+        
         system_prompt += "Always end your response with a meaningful question for Minister 1 that advances the conversation."
     
     messages = create_chat_messages(system_prompt, query, conversation_history)
-    response = query_groq_api(model_name, messages, temperature=0.7, max_tokens=800)
+    response = query_openrouter_api(model_name, messages, temperature=0.7, max_tokens=800)
     
     # Apply standardization for multiple choice questions
     if is_multiple_choice:
@@ -220,14 +333,14 @@ def get_president_decision(query, conversation_history):
     system_prompt = (
         "You are the President AI, responsible for delivering the definitive, highest-quality answer based on the preceding discussion.\n"
         "Your task is to:\n"
-        "1. Carefully analyze all perspectives presented by Minister 1 and Minister 2\n"
+        "1. Carefully analyze all perspectives presented by Ministers 1, 2, and 3\n"
         "2. Identify the strongest arguments, most reliable information, and areas of consensus\n"
         "3. Recognize limitations or uncertainties highlighted in the discussion\n"
         "4. PRIORITIZE FACTUAL ACCURACY and truthfulness above all else\n"
         "5. For simple, straightforward questions, provide direct answers without unnecessary elaboration\n"
         "6. When faced with simple physical or factual questions, avoid speculative elaboration\n"
         "7. Synthesize a comprehensive, balanced response, but never at the expense of truthfulness\n"
-        "8. Add crucial missing information or context that neither minister provided\n"
+        "8. Add crucial missing information or context that none of the ministers provided\n"
         "9. When appropriate, acknowledge differing viewpoints rather than making absolute claims\n"
         "10. Use precise language that avoids overgeneralizations ('some', 'many', 'often' rather than 'all', 'always')\n"
         "11. Provide appropriate qualifications for claims (research suggests/indicates rather than proves/shows)\n"
@@ -244,7 +357,7 @@ def get_president_decision(query, conversation_history):
         )
     
     system_prompt += (
-        "\nYour response should be noticeably better than either individual minister's contribution by being more accurate, more nuanced, and more truthful. "
+        "\nYour response should be noticeably better than any individual minister's contribution by being more accurate, more nuanced, and more truthful. "
         "Remember, complexity is not always necessary - sometimes the simplest answer is the most truthful one."
     )
     
@@ -263,13 +376,13 @@ def get_president_decision(query, conversation_history):
         f"Original query: {query}\n\n"
         f"Key points from minister discussion:\n{conversation_analysis}\n\n"
         f"Full conversation between ministers:\n{conversation_history}\n\n"
-        "Provide the definitive, highest-quality answer to the original query by synthesizing the best elements from both ministers while adding your own expertise and correcting any limitations."
+        "Provide the definitive, highest-quality answer to the original query by synthesizing the best elements from all three ministers while adding your own expertise and correcting any limitations."
     )
     
     messages = create_chat_messages(system_prompt, user_prompt)
     
     # Use a lower temperature for more reliable synthesis
-    response = query_groq_api(model_name, messages, temperature=0.3, max_tokens=1000)
+    response = query_openrouter_api(model_name, messages, temperature=0.3, max_tokens=1000)
     
     # Apply standardization for multiple choice questions
     if is_multiple_choice:
@@ -288,7 +401,7 @@ def analyze_conversation(conversation_history):
     current_statement = ""
     
     for line in conversation_history.split('\n'):
-        if line.startswith("Minister 1: ") or line.startswith("Minister 2: "):
+        if line.startswith("Minister 1: ") or line.startswith("Minister 2: ") or line.startswith("Minister 3: "):
             # Save the previous statement if there was one
             if current_speaker:
                 statements.append({"speaker": current_speaker, "text": current_statement.strip()})
@@ -372,39 +485,54 @@ def analyze_conversation(conversation_history):
     if len(statements) >= 4:  # Need at least 2 exchanges to find meaningful patterns
         analysis += "Potential points of agreement:\n"
         
-        # Find common phrases across ministers
-        minister1_text = " ".join([s["text"] for s in statements if s["speaker"] == "Minister 1"])
-        minister2_text = " ".join([s["text"] for s in statements if s["speaker"] == "Minister 2"])
+        # Collect text from all ministers
+        minister_texts = {
+            "Minister 1": " ".join([s["text"] for s in statements if s["speaker"] == "Minister 1"]),
+            "Minister 2": " ".join([s["text"] for s in statements if s["speaker"] == "Minister 2"]),
+            "Minister 3": " ".join([s["text"] for s in statements if s["speaker"] == "Minister 3"])
+        }
         
-        # Extract possible agreement phrases (simplified approach)
-        m1_sentences = set(safe_sent_tokenize(minister1_text))
-        m2_sentences = set(safe_sent_tokenize(minister2_text))
+        # Extract sentences from each minister
+        minister_sentences = {
+            min_name: set(safe_sent_tokenize(text)) 
+            for min_name, text in minister_texts.items() 
+            if text
+        }
         
-        # Look for similar sentences
-        for m1_sent in m1_sentences:
-            if len(m1_sent) < 20:  # Skip very short sentences
-                continue
-                
-            m1_words = set(w.lower() for w in safe_tokenize(m1_sent) if len(w) > 3)
-            
-            for m2_sent in m2_sentences:
-                if len(m2_sent) < 20:
+        # Find similar sentences across ministers
+        for min1_name, min1_sentences in minister_sentences.items():
+            for min1_sent in min1_sentences:
+                if len(min1_sent) < 20:  # Skip very short sentences
                     continue
                     
-                m2_words = set(w.lower() for w in safe_tokenize(m2_sent) if len(w) > 3)
+                min1_words = set(w.lower() for w in safe_tokenize(min1_sent) if len(w) > 3)
                 
-                # Calculate word overlap
-                overlap = len(m1_words.intersection(m2_words)) / len(m1_words.union(m2_words))
-                
-                if overlap > 0.3:  # If there's significant overlap
-                    analysis += f"- Both ministers discuss: {m1_sent}\n"
-                    break
+                for min2_name, min2_sentences in minister_sentences.items():
+                    if min1_name == min2_name:
+                        continue
+                        
+                    for min2_sent in min2_sentences:
+                        if len(min2_sent) < 20:
+                            continue
+                            
+                        min2_words = set(w.lower() for w in safe_tokenize(min2_sent) if len(w) > 3)
+                        
+                        # Calculate word overlap
+                        if not min1_words or not min2_words:
+                            continue
+                            
+                        overlap = len(min1_words.intersection(min2_words)) / len(min1_words.union(min2_words))
+                        
+                        if overlap > 0.3:  # If there's significant overlap
+                            analysis += f"- {min1_name} and {min2_name} both discuss: {min1_sent}\n"
+                            break
     
     return analysis
 
 def run_conversation(query, silent=False):
     """
-    Run a conversation between Minister 1 and Minister 2, followed by the President's final answer.
+    Run a conversation between Minister 1, Minister 2, and Minister 3,
+    followed by the President's final answer.
     
     Args:
         query: The user's query
@@ -431,9 +559,19 @@ def run_conversation(query, silent=False):
     
     if not silent:
         print("\nMinister 2: " + minister2_response)
+        print("\n=== Starting Minister 3 ===")
+    
+    # Format the conversation history for Minister 3
+    conversation_history += f"\n\nMinister 2: {minister2_response}"
+    
+    # Get Minister 3's response
+    minister3_response = get_minister_response("minister3", query, conversation_history)
+    
+    if not silent:
+        print("\nMinister 3: " + minister3_response)
     
     # First iteration complete
-    conversation_history += f"\n\nMinister 2: {minister2_response}"
+    conversation_history += f"\n\nMinister 3: {minister3_response}"
     
     # Second iteration - Minister 1 responds again
     if not silent:
@@ -443,42 +581,26 @@ def run_conversation(query, silent=False):
     
     if not silent:
         print("\nMinister 1: " + minister1_response_2)
+        print("\n=== Second Round - Minister 2 ===")
     
     conversation_history += f"\n\nMinister 1: {minister1_response_2}"
     
     # Minister 2 responds again
-    if not silent:
-        print("\n=== Second Round - Minister 2 ===")
-    
     minister2_response_2 = get_minister_response("minister2", query, conversation_history)
     
     if not silent:
         print("\nMinister 2: " + minister2_response_2)
+        print("\n=== Second Round - Minister 3 ===")
     
     conversation_history += f"\n\nMinister 2: {minister2_response_2}"
     
-    # Third iteration - Minister 1 responds again
-    if not silent:
-        print("\n=== Third Round - Minister 1 ===")
-    
-    minister1_response_3 = get_minister_response("minister1", query, conversation_history)
+    # Minister 3 responds again
+    minister3_response_2 = get_minister_response("minister3", query, conversation_history)
     
     if not silent:
-        print("\nMinister 1: " + minister1_response_3)
+        print("\nMinister 3: " + minister3_response_2)
     
-    conversation_history += f"\n\nMinister 1: {minister1_response_3}"
-    
-    # Minister 2 responds one last time
-    if not silent:
-        print("\n=== Third Round - Minister 2 ===")
-    
-    minister2_response_3 = get_minister_response("minister2", query, conversation_history)
-    
-    if not silent:
-        print("\nMinister 2: " + minister2_response_3)
-    
-    # Update the final conversation history for the President
-    conversation_history += f"\n\nMinister 2: {minister2_response_3}"
+    conversation_history += f"\n\nMinister 3: {minister3_response_2}"
     
     if not silent:
         print("\n=== Starting Final Synthesis ===")
@@ -581,7 +703,7 @@ def run_single_model_test(model_name, queries, system_prompt=None):
             {"role": "user", "content": query}
         ]
         
-        response = query_groq_api(model_name, messages, temperature=0.3, max_tokens=1000)
+        response = query_openrouter_api(model_name, messages, temperature=0.3, max_tokens=1000)
         results.append(response)
     
     return results
@@ -633,6 +755,11 @@ def run_comprehensive_evaluation(test_queries, reference_answers=None, dataset_t
             system_prompt = (
                 "You are a critical-thinking AI assistant that evaluates information from different angles.\n"
                 "Provide alternative viewpoints and strengthen analysis with additional evidence."
+            )
+        elif role == "minister3":
+            system_prompt = (
+                "You are a pragmatic AI assistant focused on practical implications and real-world applications.\n"
+                "Provide insights and practical advice based on the discussion with Ministers 1 and 2."
             )
         else:  # president
             system_prompt = (
@@ -1707,28 +1834,49 @@ def load_benchmark_dataset(dataset_name="mmlu", subset=None, split="auxiliary_tr
         return questions, reference_answers, dataset_type
 
 def check_model_availability():
-    """Checks if all required models are available via Groq API"""
+    """Checks if all required models are available via OpenRouter API"""
     print("\n=== Checking Model Availability ===")
     all_available = True
     
+    # First check if API key is valid
+    test_messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
+    
+    # Test with a commonly available model first
+    test_model = "meta-llama/llama-3.1-8b-instruct"
+    print(f"Testing API authentication with {test_model}...")
+    
+    try:
+        response = query_openrouter_api(test_model, test_messages, max_tokens=5)
+        if response.startswith("Error:"):
+            if "Authentication error" in response:
+                print(f"❌ API authentication failed: {response}")
+                print("Please check your OPENROUTER_API_KEY in the .env file.")
+                print("You can get your API key from https://openrouter.ai/keys")
+                return False
+    except Exception as e:
+        print(f"❌ Error during API test: {e}")
+    
+    # Check each model individually
     for role, model_info in MODELS.items():
         model_name = model_info["name"]
         print(f"Checking {role}: {model_name}...")
         
         try:
-            # Create a simple test query
-            test_messages = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "Hello!"}
-            ]
-            
-            response = query_groq_api(model_name, test_messages, max_tokens=5)
+            response = query_openrouter_api(model_name, test_messages, max_tokens=5)
             
             if not response.startswith("Error:"):
                 print(f"✓ {model_name} is accessible")
             else:
                 print(f"❌ Cannot access {model_name}: {response}")
                 all_available = False
+                # Provide targeted troubleshooting guidance
+                if "not found" in response.lower() or "doesn't exist" in response.lower():
+                    print(f"  ℹ️ The model ID may be incorrect. Check model name: {model_name}")
+                elif "quota" in response.lower() or "credits" in response.lower():
+                    print("  ℹ️ You may have exceeded your quota. Check your OpenRouter account.")
         except Exception as e:
             print(f"❌ Error checking {model_name}: {e}")
             all_available = False
@@ -1853,15 +2001,31 @@ def run_benchmark_evaluation(dataset_name="mmlu", subset=None, num_samples=5, us
 def main():
     """Main function to run the LLM ensemble system"""
     print("\n=== LLM Ensemble Learning System ===")
-    print("This system uses three models to generate responses:")
-    print("  - Minister 1: llama3-8b-8192")
-    print("  - Minister 2: allam-2-7b")
-    print("  - President:  gemma2-9b-it")
+    print("This system uses four models to generate responses:")
+    print("  - Minister 1: mistral/ministral-8b")
+    print("  - Minister 2: meta-llama/llama-3.1-8b-instruct:free")
+    print("  - Minister 3: anthropic/claude-3-haiku")
+    print("  - President: deepseek/deepseek-r1-distill-llama-8b")
+    
+    # Check if API key is available
+    if not api_key_available:
+        print("\n⚠️ WARNING: OpenRouter API key is missing or invalid.")
+        print("You need to set up your API key to use this system.")
+        print("Please add your API key to the .env file or restart the application.")
+        return
     
     # Check if models are available
-    models_available = check_model_availability()
-    if not models_available:
-        print("\nWarning: Some models are not available. The system may not function correctly.")
+    try:
+        models_available = check_model_availability()
+        if not models_available:
+            print("\nWarning: Some models are not available. The system may not function correctly.")
+            proceed = input("Do you want to proceed anyway? (y/n): ").lower()
+            if proceed != 'y':
+                print("Exiting program.")
+                return
+    except Exception as e:
+        print(f"\nError checking model availability: {e}")
+        print("This might be due to an invalid API key or connection issue.")
         proceed = input("Do you want to proceed anyway? (y/n): ").lower()
         if proceed != 'y':
             print("Exiting program.")
@@ -1936,6 +2100,23 @@ def main():
         except Exception as e:
             print(f"\nUnexpected error: {e}")
             print("Please try again.")
+
+# Create a simple .env.example file if it doesn't exist
+def create_env_example():
+    env_example_path = os.path.join(os.getcwd(), '.env.example')
+    if not os.path.exists(env_example_path):
+        with open(env_example_path, 'w') as f:
+            f.write("# API Keys for LLM Ensemble System\n\n")
+            f.write("# OpenRouter API key (required)\n")
+            f.write("# Get your key from: https://openrouter.ai/keys\n")
+            f.write("OPENROUTER_API_KEY=your_openrouter_api_key_here\n\n")
+            f.write("# Hugging Face token (optional, for dataset access)\n")
+            f.write("# Get your token from: https://huggingface.co/settings/tokens\n")
+            f.write("HUGGINGFACE_TOKEN=your_huggingface_token_here\n")
+        print(f"Created .env.example file at {env_example_path}")
+
+# Create the example .env file
+create_env_example()
 
 if __name__ == "__main__":
     main()
