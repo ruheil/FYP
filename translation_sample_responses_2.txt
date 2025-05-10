@@ -1,0 +1,132 @@
+=== Sample Responses for Qualitative Analysis ===
+
+Query 1: Translate the following EN text to DE:
+
+Valeria Mazza, wearing a Valentino.
+
+Reference Answer:
+Valeria Mazza, in einem Kleid von Valentino
+
+collaborative Response:
+Valeria Mazza trägt ein Valentino.
+
+Individual Model Responses:
+
+minister1:
+Valeria Mazza trägt ein Valentino.
+
+minister2:
+Valeria Mazza, die ein Valentino trägt.
+
+minister3:
+Valeria Mazza trägt einen Valentino.
+
+president:
+Valeria Mazza trug einen Valentino.
+
+================================================================================
+
+Query 2: Translate the following EN text to DE:
+
+Among the controversial EU regulations, we might include the mandatory addition of bio-ingredients to fuel, which consequently harms the environment, the ban on reliable mercury thermometers just because they contain a relatively small quantity of a toxic substance, or the rules on the size of chicken cages, which significantly raised egg prices this year.
+
+Reference Answer:
+Zu den kontroversen EU-Verordnungen gehört u.a. die verbindliche Beimischung von Bioethanol zu Kraftstoffen, die in ihrer Folge naturschädigend ist, des weiteren das Verbot der zuverlässigen Quecksilberthermometer, nur weil diese eine relativ geringe Menge dieses Gefahrenstoffes enthalten, oder auch die Richtlinie zur Größe von Hühnerkäfigen, wegen der in diesem Jahr Eier wesentlich teurer wurden.
+
+collaborative Response:
+Unter den umstrittenen EU-Vorschriften könnten wir die Pflicht zur Zugabe von Bio-Zutaten zu Kraftstoffen, die die Umwelt schädigen, das Verbot von zuverlässigen Quecksilber-Thermometern nur wegen eines relativ geringen Anteils einer giftigen Substanz oder die Vorschriften zur Größe von Hühnerkäfigen nennen, die die Eipreise dieses Jahr erheblich erhöht haben.
+
+Individual Model Responses:
+
+minister1:
+Unter den umstrittenen EU-Vorschriften könnten wir die Pflicht zur Zugabe von Bio-Zutaten zu Brennstoffen, die die Umwelt schädigen, das Verbot von zuverlässigen Quecksilber-Thermometern nur wegen eines relativ kleinen Anteils einer giftigen Substanz oder die Vorschriften über die Größe von Hühnerkäfigen, die die Eipreise dieses Jahr erheblich erhöht haben, nennen.
+
+minister2:
+Unter den umstrittenen EU-Regulierungen könnten wir auch die verpflichtende Zufügung von Biozutaten zum Kraftstoff nennen, die dem Umweltschutz schaden, die Aussetzung von zuverlässigen Quecksilberthermometern nur weil sie eine relativ kleine Menge eines toxischen Stoffes enthalten, oder die Vorschriften über die Größe von Hühnerkäfigen, die dieses Jahr die Eierpreise erheblich erhöht haben.
+
+minister3:
+Unter den umstrittenen EU-Vorschriften könnten wir das Verbot zuverlässiger Quecksilberthermometer, nur weil sie eine relativ kleine Menge eines giftigen Stoffes enthalten, oder die Regeln zur Größe der Hühnerkäfige einbeziehen, die die Eierpreise dieses Jahres erheblich erhöht haben.
+
+president:
+在有争议的欧盟法规中，我们可以包括将生物成分强制添加到燃料中，这对环境有害，禁用含有较少有毒物质的汞温度计，或者鸡笼大小的规定，这些规定使鸡蛋价格大幅上涨。
+
+================================================================================
+
+Query 3: Translate the following EN text to DE:
+
+Prostate cancer screening: take the test or not?
+
+Reference Answer:
+Prostatakrebsfrüherkennung: sollte der Test gemacht werden oder nicht?
+
+collaborative Response:
+Prostatakrebs-Screening: Test machen oder nicht?
+
+Individual Model Responses:
+
+minister1:
+Prostatakrebs-Screening: Test machen oder nicht?
+
+minister2:
+Prostatakrebs-Screening: Test machen oder nicht?
+
+minister3:
+Prostatakrebs-Früherkennung: Test durchführen oder nicht?
+
+president:
+Prostatakrebscreening: die Testung durchführen oder nicht?
+
+================================================================================
+
+Query 4: Translate the following EN text to DE:
+
+Israelis will sleep more soundly - for a while.
+
+Reference Answer:
+Zumindest eine Weile lang wird Israel ruhiger schlafen können.
+
+collaborative Response:
+Israelis werden für eine Weile besser schlafen.
+
+Individual Model Responses:
+
+minister1:
+Israelis werden für eine Weile besser schlafen.
+
+minister2:
+Israelis werden für eine Weile besser schlafen.
+
+minister3:
+Israelis werden mehr tief schlafen – für eine Weile.
+
+president:
+Isräilijas bivuotumme enemmän - joskus.
+
+================================================================================
+
+Query 5: Translate the following EN text to DE:
+
+I look back, for instance, to the lecture of A Sternfeld in Warsaw's astronomy observatory, who, on the 6th of December 1933, presented ideas on his pioneering work Entry into space.
+
+Reference Answer:
+Ich erinnere hier beispielsweise an den Vortrag von A. Šternfeld vom 6. Dezember 1933 im Warschauer Observatorium, bei dem der Autor Gedanken aus seiner Pionierarbeit "Eingang zur Kosmonautik" vorstellte.
+
+collaborative Response:
+Ich denke an die Vorlesung von A. Sternfeld im Warschauer Sternenbeobachtungszentrum zurück, bei der er am 6. Dezember 1933 seine bahnbrechenden Ideen zu seinem Werk "Eintritt in den Weltraum" vorstellte.
+
+Individual Model Responses:
+
+minister1:
+Ich denke an die Vorlesung von A. Sternfeld im Warschauer Sternenbeobachtungsobservatorium zurück, bei der er am 6. Dezember 1933 seine bahnbrechenden Ideen zu seinem Werk "Eintritt in den Weltraum" vorstellte.
+
+minister2:
+Ich denke zurück, zum Beispiel, an die Vorlesung von A. Sternfeld im Warschauer Astronomischen Observatorium, in der er am 6. Dezember 1933 Ideen zu seinem bahnbrechenden Werk "Eintritt in den Weltraum" vorstellte.
+
+minister3:
+
+
+president:
+Ich erinnere mich an die Vorlesung von A. Sternfeld im Warschauer Astronomischen Observatorium, die am 6. Dezember 1933 stattfand, bei der er Ideen zu seinem bahnbrechenden Werk über den Eintritt ins All vorgetragen hat.
+
+================================================================================
+

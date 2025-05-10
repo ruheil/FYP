@@ -1,0 +1,142 @@
+=== Sample Responses for Qualitative Analysis ===
+
+Query 1: Translate the following EN text to DE:
+
+He is suspected of pocketing repeated bribes in exchange for public contracts.
+
+Reference Answer:
+Er wird verdächtigt, im Austausch für öffentliche Aufträge wiederholt Schmiergelder entgegengenommen zu haben.
+
+collaborative Response:
+Er wird verdächtigt, wiederholt Schmiergelder eingesteckt zu haben, um öffentliche Aufträge zu erhalten.
+
+Individual Model Responses:
+
+minister1:
+Er wird verdächtigt, wiederholt Schmiergelder eingesteckt zu haben, um öffentliche Aufträge zu erhalten.
+
+minister2:
+Er wird verdächtigt, wiederholt Bestechungsgelder in den Taschen zu haben, um gegen öffentliche Aufträge zu erhalten.
+
+minister3:
+Er wird verdächtigt, mehrfache Bestechungen im Austausch für öffentliche Aufträge zu empfangen.
+
+president:
+Er ist verdächtig, wiederholte Bestellungen durch Beihilfen zu erhalten und dafür öffentliche Verträge zu erhalten.
+
+================================================================================
+
+Query 2: Translate the following EN text to DE:
+
+But it's hard to solve the problem of reproduction directly in space.
+
+Reference Answer:
+Die Problematik der Fortpflanzung direkt im Weltraum konnte man bisher nicht lösen.
+
+collaborative Response:
+Es ist schwierig, das Problem der Fortpflanzung direkt im Weltraum zu lösen.
+
+Individual Model Responses:
+
+minister1:
+Es ist schwierig, das Problem der Fortpflanzung direkt im Weltraum zu lösen.
+
+minister2:
+Aber es ist schwierig, das Problem der Reproduktion direkt im Weltraum zu lösen.
+
+minister3:
+Aber es ist schwierig, das Reproduktionsproblem direkt im Raum zu lösen.
+
+president:
+Es ist schwierig, das Problem der Reproduktion im Weltraum direkt anzupacken. Vielleicht beziele ich mich auf die Schöpfung von Neubindungen, wie im Bereich der Biologie oder der Technologie. Im Weltraum sind Materialien und Geräte von Bedeutung, also könnte das Problem darum gehen, wie man Gegenstände oder Strukturen im Weltraum erstellt. 
+
+Ich denke, es könnte auch um Selbstvervielfältigung gehen, also wie etwas sich selbst vervielfältigt. Das klingt wie eine Science-Fiction-Doktrin, aber es gibt Forschung in diesem Bereich. Vielleicht geht es darum, wie Maschinen im Weltraum Geräte herstellen können. 
+
+Auch die Reproduktion biologischer Organismen im Weltraum könnte ein Thema sein. Pflanzen und einige Tiere sind in den Weltraum gesandt worden, aber ihre Fortpflanzung ist begrenzt. Vielleicht geht es darum, wie man die Reproduktion im Weltraum wirft. 
+
+Ich sollte auch die verfügbaren Ressourcen im Weltraum berücksichtigen. Inwiefern sind die Materialien genug, um Reproduktion zu ermöglichen? Im Weltraum sind Ressourcen begrenzt, also ist effiziente Nutzung entscheidend. Vielleicht geht es darum, die verfügbaren Ressourcen optimal zu nutzen. 
+
+Energie ist ebenfalls ein Faktor. Raumfahrt und -betrieb erfordern viel Energie, also wie wirft das die Reproduktionsprozesse im Weltraum? Vielleicht sind die Energieanforderungen höher, und wir müssen Methoden finden, um das zu bewältigen. 
+
+Ich denke auch an
+
+================================================================================
+
+Query 3: Translate the following EN text to DE:
+
+There are also two small children running around.
+
+Reference Answer:
+Auch zwei Kleinkinder springen herum.
+
+collaborative Response:
+Es gibt auch zwei kleine Kinder, die herumlaufen.
+
+Individual Model Responses:
+
+minister1:
+Es gibt auch zwei kleine Kinder, die herumlaufen.
+
+minister2:
+Es gibt auch zwei kleine Kinder, die herumlaufen.
+
+minister3:
+Es gibt auch zwei kleine Kinder, die herumlaufen.
+
+president:
+Es gibt auch zwei kleine Kinder, die herumlaufen.
+
+================================================================================
+
+Query 4: Translate the following EN text to DE:
+
+Counterfeiters from China and Indonesia will bring lots more of these products down to sell on the streets of Australia.
+
+Reference Answer:
+Chinesische und indonesische Fälscher werden weitaus größere Mengen dieser Produkte auf den Straßen Australiens anbieten.
+
+collaborative Response:
+Fälscher aus China und Indonesien werden noch mehr dieser Produkte nach Australien bringen, um sie auf den Straßen zu verkaufen.
+
+Individual Model Responses:
+
+minister1:
+Fälscher aus China und Indonesien werden noch mehr dieser Produkte nach Australien bringen, um sie auf den Straßen zu verkaufen.
+
+minister2:
+Fälscher aus China und Indonesien werden noch viel mehr dieser Produkte nach Australien bringen, um sie auf den Straßen zu verkaufen.
+
+minister3:
+Fälscher aus China und Indonesien werden noch mehr dieser Produkte herunterbringen, um sie auf den Straßen Australiens zu verkaufen.
+
+president:
+Counterfeiters from China and Indonesia will bring lots more of these products down to sell on the streets of Australia.
+
+================================================================================
+
+Query 5: Translate the following EN text to DE:
+
+In our time, it is easy to become popular, but culture and popularity are different. You can be popular, but not very cultural.
+
+Reference Answer:
+In der heutigen Zeit ist es einfach, berühmt zu werden, aber Kultur und Popularität sind nicht das gleiche: Man kann berühmt sein, ohne damit einen kulturellen Beitrag zu leisten.
+
+collaborative Response:
+In unserer Zeit ist es leicht, beliebt zu werden, aber Kultur und Beliebtheit sind unterschiedlich. Man kann beliebt sein, aber nicht sehr kultiviert.
+
+Individual Model Responses:
+
+minister1:
+In unserer Zeit ist es leicht, beliebt zu werden, aber Kultur und Beliebtheit sind unterschiedlich. Du kannst beliebt sein, aber nicht sehr kulturell.
+
+minister2:
+In unserer Zeit ist es leicht, beliebt zu werden, aber Kultur und Beliebtheit sind etwas anderes. Man kann beliebt sein, aber nicht sehr kulturell.
+
+minister3:
+In unserer Zeit ist es leicht, beliebt zu werden, aber Kultur und Beliebtheit sind unterschiedlich. Du kannst beliebt sein, aber nicht sehr kultiviert.
+
+president:
+\"Im Kultur und Beliebtheit sind sie verschieden. Du kannst beliebt werden, aber nicht kulturell sein.\"
+
+================================================================================
+

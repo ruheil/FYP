@@ -1,0 +1,114 @@
+=== Evaluation Results ===
+
+Test Queries:
+1. Translate the following EN text to DE:
+
+Valeria Mazza, wearing a Valentino.
+2. Translate the following EN text to DE:
+
+Among the controversial EU regulations, we might include the mandatory addition of bio-ingredients to fuel, which consequently harms the environment, the ban on reliable mercury thermometers just because they contain a relatively small quantity of a toxic substance, or the rules on the size of chicken cages, which significantly raised egg prices this year.
+3. Translate the following EN text to DE:
+
+Prostate cancer screening: take the test or not?
+4. Translate the following EN text to DE:
+
+Israelis will sleep more soundly - for a while.
+5. Translate the following EN text to DE:
+
+I look back, for instance, to the lecture of A Sternfeld in Warsaw's astronomy observatory, who, on the 6th of December 1933, presented ideas on his pioneering work Entry into space.
+
+=== collaborative Results ===
+
+Query 1 Response:
+Valeria Mazza trägt ein Valentino.
+
+Query 2 Response:
+Unter den umstrittenen EU-Vorschriften könnten wir die Pflicht zur Zugabe von Bio-Zutaten zu Kraftstoffen, die die Umwelt schädigen, das Verbot von zuverlässigen Quecksilber-Thermometern nur wegen eines relativ geringen Anteils einer giftigen Substanz oder die Vorschriften zur Größe von Hühnerkäfigen nennen, die die Eipreise dieses Jahr erheblich erhöht haben.
+
+Query 3 Response:
+Prostatakrebs-Screening: Test machen oder nicht?
+
+Query 4 Response:
+Israelis werden für eine Weile besser schlafen.
+
+Query 5 Response:
+Ich denke an die Vorlesung von A. Sternfeld im Warschauer Sternenbeobachtungszentrum zurück, bei der er am 6. Dezember 1933 seine bahnbrechenden Ideen zu seinem Werk "Eintritt in den Weltraum" vorstellte.
+
+=== Individual Model Results ===
+
+--- Minister1 Model (mistral/ministral-8b) ---
+
+Query 1 Response:
+Valeria Mazza trägt ein Valentino.
+
+Query 2 Response:
+Unter den umstrittenen EU-Vorschriften könnten wir die Pflicht zur Zugabe von Bio-Zutaten zu Brennstoffen, die die Umwelt schädigen, das Verbot von zuverlässigen Quecksilber-Thermometern nur wegen eines relativ kleinen Anteils einer giftigen Substanz oder die Vorschriften über die Größe von Hühnerkäfigen, die die Eipreise dieses Jahr erheblich erhöht haben, nennen.
+
+Query 3 Response:
+Prostatakrebs-Screening: Test machen oder nicht?
+
+Query 4 Response:
+Israelis werden für eine Weile besser schlafen.
+
+Query 5 Response:
+Ich denke an die Vorlesung von A. Sternfeld im Warschauer Sternenbeobachtungsobservatorium zurück, bei der er am 6. Dezember 1933 seine bahnbrechenden Ideen zu seinem Werk "Eintritt in den Weltraum" vorstellte.
+
+--- Minister2 Model (meta-llama/llama-3.1-8b-instruct) ---
+
+Query 1 Response:
+Valeria Mazza, die ein Valentino trägt.
+
+Query 2 Response:
+Unter den umstrittenen EU-Regulierungen könnten wir auch die verpflichtende Zufügung von Biozutaten zum Kraftstoff nennen, die dem Umweltschutz schaden, die Aussetzung von zuverlässigen Quecksilberthermometern nur weil sie eine relativ kleine Menge eines toxischen Stoffes enthalten, oder die Vorschriften über die Größe von Hühnerkäfigen, die dieses Jahr die Eierpreise erheblich erhöht haben.
+
+Query 3 Response:
+Prostatakrebs-Screening: Test machen oder nicht?
+
+Query 4 Response:
+Israelis werden für eine Weile besser schlafen.
+
+Query 5 Response:
+Ich denke zurück, zum Beispiel, an die Vorlesung von A. Sternfeld im Warschauer Astronomischen Observatorium, in der er am 6. Dezember 1933 Ideen zu seinem bahnbrechenden Werk "Eintritt in den Weltraum" vorstellte.
+
+--- Minister3 Model (qwen/qwen3-8b) ---
+
+Query 1 Response:
+Valeria Mazza trägt einen Valentino.
+
+Query 2 Response:
+Unter den umstrittenen EU-Vorschriften könnten wir das Verbot zuverlässiger Quecksilberthermometer, nur weil sie eine relativ kleine Menge eines giftigen Stoffes enthalten, oder die Regeln zur Größe der Hühnerkäfige einbeziehen, die die Eierpreise dieses Jahres erheblich erhöht haben.
+
+Query 3 Response:
+Prostatakrebs-Früherkennung: Test durchführen oder nicht?
+
+Query 4 Response:
+Israelis werden mehr tief schlafen – für eine Weile.
+
+Query 5 Response:
+
+
+--- President Model (deepseek/deepseek-r1-distill-llama-8b) ---
+
+Query 1 Response:
+Valeria Mazza trug einen Valentino.
+
+Query 2 Response:
+在有争议的欧盟法规中，我们可以包括将生物成分强制添加到燃料中，这对环境有害，禁用含有较少有毒物质的汞温度计，或者鸡笼大小的规定，这些规定使鸡蛋价格大幅上涨。
+
+Query 3 Response:
+Prostatakrebscreening: die Testung durchführen oder nicht?
+
+Query 4 Response:
+Isräilijas bivuotumme enemmän - joskus.
+
+Query 5 Response:
+Ich erinnere mich an die Vorlesung von A. Sternfeld im Warschauer Astronomischen Observatorium, die am 6. Dezember 1933 stattfand, bei der er Ideen zu seinem bahnbrechenden Werk über den Eintritt ins All vorgetragen hat.
+
+=== Automated Metrics ===
+Model | BLEU               | BLEU-1             | BLEU-2             | BLEU-3             | BLEU-4            
+--------------------------------------------------------------------------------------------------------------
+collaborative   | 0.0502               | 0.2936               | 0.1707               | 0.0906               | 0.0502              
+minister1       | 0.0481               | 0.2938               | 0.1624               | 0.0833               | 0.0481              
+minister2       | 0.0575               | 0.3463               | 0.2153               | 0.1014               | 0.0575              
+minister3       | 0.0417               | 0.2503               | 0.1244               | 0.0641               | 0.0417              
+president       | 0.0296               | 0.1569               | 0.0964               | 0.0505               | 0.0296              
