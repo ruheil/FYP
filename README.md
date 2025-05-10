@@ -82,4 +82,4 @@ The system can evaluate performance on standard benchmarks:
 
 ## License
 
-[Your chosen license] 
+This project is open source and available under the MIT License. 
