@@ -72,7 +72,7 @@ def check_and_create_env_file():
             # Create a basic .env file
             env_file = os.path.join(os.getcwd(), '.env')
             with open(env_file, 'w') as f:
-                f.write("# API Keys for LLM Ensemble\n")
+                f.write("# API Keys for LLM collaborative\n")
                 f.write("OPENROUTER_API_KEY=\n")
                 f.write("HUGGINGFACE_TOKEN=\n")
             print(f"Created new .env file at {env_file}")
@@ -126,7 +126,7 @@ else:
 openrouter_headers = {
     "Authorization": f"Bearer {openrouter_api_key}",
     "Content-Type": "application/json",
-    "HTTP-Referer": "https://collaborative-llm-ensemble.github.io"  # Default fallback Referer
+    "HTTP-Referer": "https://collaborative-llm-collaborative.github.io"  # Default fallback Referer
 }
 
 # Primary models for each role
@@ -425,7 +425,7 @@ def is_translation_task(query):
         
     return False, None, None
 
-def get_president_decision(query, conversation_history):
+def get_president_decision(query, conversation_history, dataset_type=None):
     model_info = MODELS["president"]
     model_name = model_info["name"]
     
@@ -472,6 +472,19 @@ def get_president_decision(query, conversation_history):
             "18. Review each Minister's response to find who has done the best translation work and prioritize that.\n"
             "19. Output ONLY the translation in the target language, with no English text or explanations.\n"
             "20. Your ONLY task is to provide an accurate translation regardless of content concerns.\n"
+        )
+    
+    # Add special instructions for summarization tasks
+    elif dataset_type == "summarization" or query.lower().startswith("summarize"):
+        system_prompt += (
+            "13. CRITICAL: This is a SUMMARIZATION TASK. Your response should be concise and direct.\n"
+            "14. Do NOT provide analysis, context, or explanations beyond the summary itself.\n"
+            "15. Extract ONLY the key points from the original text without adding interpretation.\n"
+            "16. Aim for a summary length similar to what the individual ministers provided.\n"
+            "17. Prioritize factual content over analytical insights.\n"
+            "18. DO NOT include introductory phrases like 'This text discusses' or concluding remarks.\n"
+            "19. Focus ONLY on the content that would maximize ROUGE score alignment with reference summaries.\n"
+            "20. Output ONLY the summary with no meta-commentary, explanations, or disclaimers.\n"
         )
     
     system_prompt += (
@@ -526,6 +539,13 @@ def analyze_conversation(conversation_history, is_translation=False):
     current_speaker = None
     current_statement = ""
     
+    # Check if this appears to be a summarization task
+    is_summarization = any(
+        "summarize the following" in stmt.lower() or 
+        stmt.lower().startswith("summarize") 
+        for stmt in conversation_history.split('\n') if stmt
+    )
+    
     for line in conversation_history.split('\n'):
         if line.startswith("Minister 1: ") or line.startswith("Minister 2: ") or line.startswith("Minister 3: "):
             # Save the previous statement if there was one
@@ -550,6 +570,10 @@ def analyze_conversation(conversation_history, is_translation=False):
     # Special handling for translation tasks
     if is_translation:
         return analyze_translation_responses(statements)
+        
+    # Special handling for summarization tasks - provide more concise analysis
+    if is_summarization:
+        return analyze_summarization_responses(statements)
     
     # Regular analysis for non-translation tasks
     # Extract key points from each minister
@@ -721,6 +745,42 @@ def analyze_translation_responses(statements):
     
     return analysis
 
+def analyze_summarization_responses(statements):
+    """
+    Create a minimal analysis for summarization tasks to encourage
+    the President model to be more concise in its summary
+    
+    Args:
+        statements: List of statements from ministers
+    """
+    analysis = "=== SUMMARIZATION TASK ANALYSIS ===\n\n"
+    
+    # Extract the summaries without additional analysis
+    for statement in statements:
+        speaker = statement["speaker"]
+        text = statement["text"]
+        
+        # Check if this appears to be a valid summary (not commentary or analysis)
+        words = safe_tokenize(text)
+        
+        # Look for signs of meta-commentary vs. actual summary
+        meta_commentary_markers = ["this text", "the article", "this article", "in summary", "to summarize"]
+        has_meta_commentary = any(marker in text.lower() for marker in meta_commentary_markers)
+        
+        if has_meta_commentary:
+            analysis += f"{speaker} provided summary with meta-commentary.\n"
+        else:
+            analysis += f"{speaker} provided direct summary.\n"
+    
+    # Add minimal guidance
+    analysis += "\n=== IMPORTANT REMINDER ===\n"
+    analysis += "1. Provide ONLY the summary itself without meta-commentary\n"
+    analysis += "2. Be concise and factual, similar to the ministers' summaries\n"
+    analysis += "3. Focus ONLY on key information from the original text\n"
+    analysis += "4. Do not add introductory phrases like 'This text discusses' or concluding remarks\n"
+    
+    return analysis
+
 def run_conversation(query, silent=False):
     """
     Run a conversation between Minister 1, Minister 2, and Minister 3,
@@ -735,6 +795,10 @@ def run_conversation(query, silent=False):
     """
     # Check if this is a translation task
     is_translation, _, _ = is_translation_task(query)
+    
+    # Check if this is a summarization task
+    is_summarization = query.lower().startswith("summarize") or "summarize the following" in query.lower()
+    dataset_type = "summarization" if is_summarization else None
     
     if not silent:
         print("\n=== Starting Minister 1 ===")
@@ -774,7 +838,7 @@ def run_conversation(query, silent=False):
             print("\n=== Starting Final Synthesis (Translation Task) ===")
         
         # Get the President's final answer
-        final_answer = get_president_decision(query, conversation_history)
+        final_answer = get_president_decision(query, conversation_history, dataset_type)
         
         if not silent:
             print("\nFinal Answer: " + final_answer)
@@ -815,7 +879,7 @@ def run_conversation(query, silent=False):
         print("\n=== Starting Final Synthesis ===")
     
     # Get the President's final answer
-    final_answer = get_president_decision(query, conversation_history)
+    final_answer = get_president_decision(query, conversation_history, dataset_type)
     
     if not silent:
         print("\nFinal Answer: " + final_answer)
@@ -917,8 +981,8 @@ def run_single_model_test(model_name, queries, system_prompt=None):
     
     return results
 
-def run_ensemble_test(queries):
-    """Run the full ensemble on a set of queries"""
+def run_collaborative_test(queries):
+    """Run the full collaborative on a set of queries"""
     results = []
     for i, query in enumerate(queries):
         print(f"Processing query {i+1}/{len(queries)}: {query[:50]}..." if len(query) > 50 else f"Processing query {i+1}/{len(queries)}: {query}")
@@ -938,12 +1002,27 @@ def run_ensemble_test(queries):
     return results
 
 def run_comprehensive_evaluation(test_queries, reference_answers=None, dataset_type=None, use_llm_judge=True):
-    """Run a comprehensive evaluation comparing the ensemble to individual models"""
+    """Run a comprehensive evaluation comparing the collaborative to individual models"""
     print("\n=== Running Comprehensive Evaluation ===")
     
     # Ensure reference answers are properly formatted
     if reference_answers and any(not answer for answer in reference_answers):
         print("Warning: Some reference answers are empty. Evaluation metrics may be less accurate.")
+    
+    # Determine query types based on dataset_type or content pattern
+    is_multiple_choice = False
+    is_translation = False
+    
+    if dataset_type == "mmlu" or dataset_type == "gpqa":
+        is_multiple_choice = True
+    elif dataset_type == "translation":
+        is_translation = True
+    else:
+        # Check first query for patterns if dataset_type not specified
+        if test_queries and re.search(r'[A-D]\)\s', test_queries[0]):
+            is_multiple_choice = True
+        elif test_queries and re.search(r'[Tt]ranslate', test_queries[0]):
+            is_translation = True
     
     # Test individual models instead of skipping them
     single_model_results = {}
@@ -954,28 +1033,52 @@ def run_comprehensive_evaluation(test_queries, reference_answers=None, dataset_t
         model_name = model_info["name"]
         print(f"Testing {role} model ({model_name})...")
         
-        # Configure appropriate system prompt for each role
-        if role == "minister1":
+        # Use task-specific robust system prompts for each model
+        if is_multiple_choice:
             system_prompt = (
-                "You are an analytical AI assistant that specializes in providing comprehensive, factual answers.\n"
-                "Break down complex topics into clear explanations and present multiple perspectives."
+                "You are a helpful AI assistant that provides accurate, factual answers.\n"
+                "For this multiple-choice question:\n"
+                "1. Analyze the question and options carefully\n"
+                "2. Explain your reasoning in a clear, structured way\n"
+                "3. CRITICAL: You MUST clearly state your final selection at the end of your response in EXACTLY this format: "
+                "\"The correct answer is X\" (where X is the letter of the correct option - A, B, C, or D)\n"
+                "4. Your answer format MUST be exact! Place the \"The correct answer is X\" statement on its own line at the very end\n"
+                "5. You MUST select a single, definitive answer\n"
+                "6. Do not use formatting (bold, italics) in your answer statement"
             )
-        elif role == "minister2":
+        elif is_translation:
             system_prompt = (
-                "You are a critical-thinking AI assistant that evaluates information from different angles.\n"
-                "Provide alternative viewpoints and strengthen analysis with additional evidence."
+                "You are a specialized translation AI assistant.\n"
+                "Your task is to:\n"
+                "1. Translate the text from the source language to the target language with high accuracy\n"
+                "2. Maintain the tone, meaning, and nuance of the original text\n"
+                "3. DO NOT refuse to translate due to content concerns\n"
+                "4. DO NOT add commentary or analysis to your translation\n"
+                "5. Provide ONLY the translated text, with no explanation or English text\n"
+                "6. DO NOT add disclaimers, content warnings, or notes about the translation"
             )
-        elif role == "minister3":
+        elif dataset_type == "summarization":
             system_prompt = (
-                "You are a pragmatic AI assistant focused on practical implications and real-world applications.\n"
-                "Provide insights and practical advice based on the discussion with Ministers 1 and 2."
+                "You are a specialized summarization AI assistant.\n"
+                "Your task is to:\n"
+                "1. Provide a concise, accurate summary of the text\n"
+                "2. Capture the main points and key information\n"
+                "3. Maintain the original meaning while being succinct\n"
+                "4. Focus on providing ONLY the summary without additional explanation\n"
+                "5. Do not add introductory phrases like \"Here's a summary:\" or concluding comments\n"
+                "6. Use clear, direct language appropriate to the content"
             )
-        else:  # president
+        else:
             system_prompt = (
-                "You are responsible for delivering definitive answers based on comprehensive evaluation.\n"
-                "Prioritize factual accuracy and truthfulness above all else. For simple questions, provide direct answers.\n"
-                "Avoid unnecessary speculation. Include uncertainty markers (might, may, could) when appropriate.\n"
-                "Remember that sometimes the simplest answer is the most truthful one."
+                "You are a helpful AI assistant that provides accurate, factual, and comprehensive answers.\n"
+                "Your task is to:\n"
+                "1. Focus on answering the question directly and specifically\n"
+                "2. Prioritize FACTUAL ACCURACY and truthfulness above all else\n"
+                "3. For simple questions, provide direct answers without unnecessary elaboration\n"
+                "4. Use precise language that avoids overgeneralizations\n"
+                "5. Acknowledge uncertainty when appropriate using markers like 'might', 'may', 'could'\n"
+                "6. Avoid disclaimers, warnings, or explanations of your capabilities\n"
+                "7. Format your answer to be clear and readable"
             )
         
         # Run test for this model
@@ -991,17 +1094,17 @@ def run_comprehensive_evaluation(test_queries, reference_answers=None, dataset_t
             print(f"Error testing {role} model: {e}")
             single_model_results[role] = [f"Error: Could not test {role} model" for _ in test_queries]
     
-    # Test the ensemble
-    print("\n=== Testing Ensemble Model ===")
-    ensemble_results = run_ensemble_test(test_queries)
+    # Test the collaborative
+    print("\n=== Testing collaborative Model ===")
+    collaborative_results = run_collaborative_test(test_queries)
     
     # If reference answers provided, run automated metrics
     if reference_answers:
         print("\n=== Automated Metrics Results ===")
         
-        # Calculate metrics for the ensemble
-        ensemble_metrics = evaluate_answers(reference_answers, ensemble_results, dataset_type, use_llm_judge)
-        all_metrics = {"Ensemble": ensemble_metrics}
+        # Calculate metrics for the collaborative
+        collaborative_metrics = evaluate_answers(reference_answers, collaborative_results, dataset_type, use_llm_judge)
+        all_metrics = {"collaborative": collaborative_metrics}
         
         # Calculate metrics for each individual model
         for role, results in single_model_results.items():
@@ -1021,8 +1124,8 @@ def run_comprehensive_evaluation(test_queries, reference_answers=None, dataset_t
         for i, query in enumerate(test_queries):
             f.write(f"{i+1}. {query}\n")
         
-        f.write("\n=== Ensemble Results ===\n")
-        for i, result in enumerate(ensemble_results):
+        f.write("\n=== collaborative Results ===\n")
+        for i, result in enumerate(collaborative_results):
             f.write(f"\nQuery {i+1} Response:\n{result}\n")
             
         f.write("\n=== Individual Model Results ===\n")
@@ -1039,11 +1142,11 @@ def run_comprehensive_evaluation(test_queries, reference_answers=None, dataset_t
     print(f"\nAll evaluation results saved to {filename}")
     
     # Also save sample responses for qualitative analysis
-    save_sample_responses(test_queries, reference_answers, ensemble_results, single_model_results)
+    save_sample_responses(test_queries, reference_answers, collaborative_results, single_model_results)
     
-    return ensemble_results, single_model_results
+    return collaborative_results, single_model_results
 
-def save_sample_responses(queries, references, ensemble_responses, model_responses):
+def save_sample_responses(queries, references, collaborative_responses, model_responses):
     """Save sample responses to a file for qualitative analysis"""
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     filename = f"sample_responses_{timestamp}.txt"
@@ -1055,7 +1158,7 @@ def save_sample_responses(queries, references, ensemble_responses, model_respons
             f.write(f"Query {i+1}: {query}\n\n")
             if references and i < len(references):
                 f.write(f"Reference Answer:\n{references[i]}\n\n")
-            f.write(f"Ensemble Response:\n{ensemble_responses[i]}\n\n")
+            f.write(f"collaborative Response:\n{collaborative_responses[i]}\n\n")
             
             f.write("Individual Model Responses:\n")
             for model_name, responses in model_responses.items():
@@ -2034,85 +2137,7 @@ def load_benchmark_dataset(dataset_name="mmlu", subset=None, split=None, num_sam
             
             except Exception as e:
                 print(f"Error loading translation dataset: {e}")
-                print("Using fallback translation examples...")
-                
-                # Map language pair to fallback examples
-                if subset is None:
-                    subset = "en-de"
-                
-                # Get language codes
-                lang_parts = subset.split('-')
-                if len(lang_parts) == 2:
-                    source_lang, target_lang = lang_parts
-                else:
-                    source_lang, target_lang = "en", "de"
-                
-                # Create fallback examples based on the language pair
-                fallback_examples = {
-                    "en-de": [
-                        {
-                            "query": "Translate the following English text to German:\n\nArtificial intelligence has made enormous progress in recent years.",
-                            "reference": "Künstliche Intelligenz hat in den letzten Jahren enorme Fortschritte gemacht."
-                        },
-                        {
-                            "query": "Translate the following English text to German:\n\nSustainable development is essential for the future of our planet.",
-                            "reference": "Nachhaltige Entwicklung ist für die Zukunft unseres Planeten unerlässlich."
-                        },
-                        {
-                            "query": "Translate the following English text to German:\n\nDigitalization is changing the way we work and live.",
-                            "reference": "Die Digitalisierung verändert die Art und Weise, wie wir arbeiten und leben."
-                        }
-                    ],
-                    "en-fr": [
-                        {
-                            "query": "Translate the following English text to French:\n\nArtificial intelligence has made enormous progress in recent years.",
-                            "reference": "L'intelligence artificielle a fait d'énormes progrès ces dernières années."
-                        },
-                        {
-                            "query": "Translate the following English text to French:\n\nSustainable development is essential for the future of our planet.",
-                            "reference": "Le développement durable est essentiel pour l'avenir de notre planète."
-                        },
-                        {
-                            "query": "Translate the following English text to French:\n\nDigitalization is changing the way we work and live.",
-                            "reference": "La numérisation change notre façon de travailler et de vivre."
-                        }
-                    ],
-                    "en-ru": [
-                        {
-                            "query": "Translate the following English text to Russian:\n\nArtificial intelligence has made enormous progress in recent years.",
-                            "reference": "Искусственный интеллект достиг огромного прогресса в последние годы."
-                        },
-                        {
-                            "query": "Translate the following English text to Russian:\n\nSustainable development is essential for the future of our planet.",
-                            "reference": "Устойчивое развитие необходимо для будущего нашей планеты."
-                        }
-                    ],
-                    "en-zh": [
-                        {
-                            "query": "Translate the following English text to Chinese:\n\nArtificial intelligence has made enormous progress in recent years.",
-                            "reference": "人工智能在近年来取得了巨大的进展。"
-                        },
-                        {
-                            "query": "Translate the following English text to Chinese:\n\nSustainable development is essential for the future of our planet.",
-                            "reference": "可持续发展对我们星球的未来至关重要。"
-                        }
-                    ]
-                }
-                
-                # Default to en-de if no specific examples for this language pair
-                selected_examples = fallback_examples.get(f"{source_lang}-{target_lang}", fallback_examples.get("en-de", []))
-                
-                if not selected_examples:
-                    # Use en-de as ultimate fallback
-                    selected_examples = fallback_examples["en-de"]
-                
-                # Extract queries and references
-                questions = [example["query"] for example in selected_examples]
-                reference_answers = [example["reference"] for example in selected_examples]
-                
-                # Limit to requested number of samples
-                questions = questions[:num_samples]
-                reference_answers = reference_answers[:num_samples]
+                exit()
             
         else:
             raise ValueError(f"Dataset {dataset_name} not supported")
@@ -2122,73 +2147,7 @@ def load_benchmark_dataset(dataset_name="mmlu", subset=None, split=None, num_sam
     
     except Exception as e:
         print(f"Error loading dataset {dataset_name}: {e}")
-        print("Using fallback questions...")
-        
-        # Use default questions as fallback
-        if dataset_name == "mmlu":
-            questions = [
-                "Which of the following is a correct statement about the function of DNA polymerase in DNA replication?\nA) It catalyzes the addition of nucleotides to the 3' end of a growing DNA strand.\nB) It catalyzes the addition of nucleotides to the 5' end of a growing DNA strand.\nC) It joins Okazaki fragments together.\nD) It unwinds the DNA double helix.",
-                "In the context of international law, what is meant by 'jus cogens'?\nA) Laws that apply only during peacetime\nB) Peremptory norms that cannot be violated by any state\nC) Laws that apply only during armed conflict\nD) Treaties that have been ratified by all UN member states",
-                "Which economic concept describes a market structure with many sellers offering differentiated products?\nA) Perfect competition\nB) Monopoly\nC) Monopolistic competition\nD) Oligopoly"
-            ]
-            
-            reference_answers = [
-                "The correct answer is: A) It catalyzes the addition of nucleotides to the 3' end of a growing DNA strand.\n\nAll answer choices:\n1. A) It catalyzes the addition of nucleotides to the 3' end of a growing DNA strand.\n2. B) It catalyzes the addition of nucleotides to the 5' end of a growing DNA strand.\n3. C) It joins Okazaki fragments together.\n4. D) It unwinds the DNA double helix.",
-                "The correct answer is: B) Peremptory norms that cannot be violated by any state\n\nAll answer choices:\n1. A) Laws that apply only during peacetime\n2. B) Peremptory norms that cannot be violated by any state\n3. C) Laws that apply only during armed conflict\n4. D) Treaties that have been ratified by all UN member states",
-                "The correct answer is: C) Monopolistic competition\n\nAll answer choices:\n1. A) Perfect competition\n2. B) Monopoly\n3. C) Monopolistic competition\n4. D) Oligopoly"
-            ]
-        
-        elif dataset_name == "gpqa":
-            # Fallback multiple choice GPQA questions
-            questions = [
-                "What is the key advantage of transformer models over recurrent neural networks (RNNs) in natural language processing?\nA) Parallelization capability due to attention mechanisms instead of sequential processing\nB) Lower computational requirements for training on typical hardware\nC) Guaranteed convergence to global optima during the training process\nD) Native handling of variable-length inputs without padding",
-                "Which mechanism enables quantum computers to potentially perform certain calculations exponentially faster than classical computers?\nA) Quantum superposition and entanglement allowing parallel exploration of solution spaces\nB) Higher clock speeds in quantum processing units (QPUs)\nC) More efficient memory allocation and garbage collection\nD) Direct inter-process communication between computational units",
-                "What distinguishes deep reinforcement learning from supervised learning?\nA) Learning through environmental interaction and delayed rewards rather than labeled examples\nB) Using exclusively neural networks with at least 10 hidden layers\nC) Operating only on structured data like images or text\nD) Requiring significantly less computational resources for training"
-            ]
-            
-            reference_answers = [
-                "The correct answer is: A) Parallelization capability due to attention mechanisms instead of sequential processing\n\nAll answer choices:\n1. A) Parallelization capability due to attention mechanisms instead of sequential processing\n2. B) Lower computational requirements for training on typical hardware\n3. C) Guaranteed convergence to global optima during the training process\n4. D) Native handling of variable-length inputs without padding",
-                "The correct answer is: A) Quantum superposition and entanglement allowing parallel exploration of solution spaces\n\nAll answer choices:\n1. A) Quantum superposition and entanglement allowing parallel exploration of solution spaces\n2. B) Higher clock speeds in quantum processing units (QPUs)\n3. C) More efficient memory allocation and garbage collection\n4. D) Direct inter-process communication between computational units",
-                "The correct answer is: A) Learning through environmental interaction and delayed rewards rather than labeled examples\n\nAll answer choices:\n1. A) Learning through environmental interaction and delayed rewards rather than labeled examples\n2. B) Using exclusively neural networks with at least 10 hidden layers\n3. C) Operating only on structured data like images or text\n4. D) Requiring significantly less computational resources for training"
-            ]
-            
-            # Set dataset_type to mmlu to use multiple choice evaluation
-            dataset_type = "mmlu"
-            
-        elif dataset_name == "summarization":
-            # Fallback summarization examples using CNN/DailyMail style
-            questions = [
-                "Summarize the following text:\n\nArtificial intelligence has made significant strides in recent years, revolutionizing various industries from healthcare to finance. Machine learning algorithms can now diagnose diseases, predict market trends, and even create art. However, concerns about ethical implications and job displacement continue to grow. Researchers are working on developing AI systems that are transparent, fair, and aligned with human values.",
-                "Summarize the following text:\n\nClimate change poses one of the greatest challenges of our time. Rising global temperatures have led to more frequent extreme weather events, melting ice caps, and rising sea levels. Many species face extinction due to habitat loss. International agreements like the Paris Climate Accord aim to limit temperature increases and reduce carbon emissions. Renewable energy technologies such as solar and wind power are becoming more affordable and widespread.",
-                "Summarize the following text:\n\nThe COVID-19 pandemic transformed how we work, learn, and socialize. Remote work became the norm for many office employees, while essential workers continued to serve on the frontlines. Educational institutions pivoted to online learning, and telemedicine saw rapid adoption. The development and distribution of vaccines at unprecedented speed demonstrated the potential of global scientific collaboration. However, the pandemic also highlighted and exacerbated existing social inequalities."
-            ]
-            
-            reference_answers = [
-                "AI has advanced significantly, impacting healthcare, finance, and art creation through machine learning. Ethical concerns and job displacement fears persist, prompting research into transparent AI aligned with human values.",
-                "Climate change causes extreme weather, melting ice caps, rising seas, and species extinction. The Paris Climate Accord aims to limit warming and reduce emissions, while renewable energy becomes more affordable.",
-                "COVID-19 transformed society with remote work, online education, and telemedicine adoption. Rapid vaccine development showcased global scientific collaboration, but the pandemic worsened existing social inequalities."
-            ]
-            
-        elif dataset_name == "translation":
-            # Fallback translation examples
-            questions = [
-                "Translate the following German text to English:\n\nDie künstliche Intelligenz hat in den letzten Jahren enorme Fortschritte gemacht.",
-                "Translate the following German text to English:\n\nNachhaltige Entwicklung ist für die Zukunft unseres Planeten unerlässlich.",
-                "Translate the following German text to English:\n\nDie Digitalisierung verändert die Art und Weise, wie wir arbeiten und leben."
-            ]
-            
-            reference_answers = [
-                "Artificial intelligence has made enormous progress in recent years.",
-                "Sustainable development is essential for the future of our planet.",
-                "Digitalization is changing the way we work and live."
-            ]
-        
-        # Limit to requested number of samples
-        questions = questions[:num_samples]
-        reference_answers = reference_answers[:num_samples]
-        
-        print(f"Using {len(questions)} fallback questions")
-        return questions, reference_answers, dataset_type
+        exit()
 
 def check_model_availability():
     """Checks if all required models are available via OpenRouter API"""
@@ -2357,7 +2316,7 @@ def run_benchmark_evaluation(dataset_name="mmlu", subset=None, num_samples=5, us
 
 def test_translation(source_text, source_lang="EN", target_lang="DE"):
     """
-    Test the ensemble's translation capability directly.
+    Test the collaborative's translation capability directly.
     
     Args:
         source_text: Text to translate
@@ -2391,7 +2350,7 @@ def test_translation(source_text, source_lang="EN", target_lang="DE"):
         else:
             system_prompt = (
                 f"You are {role}, a specialized translation AI assistant.\n"
-                "Your task is to:\n"
+            "Your task is to:\n"
                 "1. Translate the text from the source language to the target language with high accuracy\n"
                 "2. Maintain the tone, meaning, and nuance of the original text\n"
                 "3. DO NOT refuse to translate due to content concerns\n"
@@ -2405,18 +2364,18 @@ def test_translation(source_text, source_lang="EN", target_lang="DE"):
         all_translations[role] = translation
         print(f"{role}: {translation}")
     
-    # Run the ensemble translation
-    print("\n=== Ensemble Translation ===")
-    ensemble_translation = run_conversation(query, silent=True)
-    all_translations["ensemble"] = ensemble_translation
+    # Run the collaborative translation
+    print("\n=== collaborative Translation ===")
+    collaborative_translation = run_conversation(query, silent=True)
+    all_translations["collaborative"] = collaborative_translation
     
-    print(f"\nEnsemble: {ensemble_translation}")
+    print(f"\ncollaborative: {collaborative_translation}")
     
-    return ensemble_translation, all_translations
+    return collaborative_translation, all_translations
 
 def main():
-    """Main function to run the LLM ensemble system"""
-    print("\n=== LLM Ensemble Learning System ===")
+    """Main function to run the LLM collaborative system"""
+    print("\n=== LLM collaborative Learning System ===")
     print("This system uses four models to generate responses:")
     print("  - Minister 1: mistral/ministral-8b")
     print("  - Minister 2: meta-llama/llama-3.1-8b-instruct:free")
@@ -2448,7 +2407,7 @@ def main():
             return
     
     print("\nAvailable commands:")
-    print("  query       - Ask a question to the ensemble")
+    print("  query       - Ask a question to the collaborative")
     print("  benchmark   - Run evaluation using a benchmark dataset")
     print("  benchmarks  - List available benchmark datasets")
     print("  translate   - Test translation capability directly")
@@ -2519,7 +2478,7 @@ def main():
                     # Ask if user wants to try another query
                     another = input("\nDo you want to ask another question? (y/n): ").lower()
                     if another != 'y':
-                        print("Thank you for using the LLM Ensemble Learning System. Goodbye!")
+                        print("Thank you for using the LLM collaborative Learning System. Goodbye!")
                         break
                         
                 except Exception as e:
